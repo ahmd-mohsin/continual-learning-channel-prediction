@@ -1,0 +1,5 @@
+torch>=2.6.0
+torchvision>=0.21.0
+ipykernel>=6.29.5
+pymatreader>=1.0.0
+setuptools>=75.8.0ß
