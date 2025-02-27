@@ -95,7 +95,7 @@
 
 %%
 
- generate_quadriga_channels_main.m
+% generate_quadriga_channels_main.m
 %
 % This main script generates channel matrices (H) using QuaDRiGa.
 % It creates one base station (8x8 UPA) and 20 user terminals (2x2 arrays)
@@ -168,11 +168,10 @@ l.simpar = s;
 b = l.init_builder;
 
 % Configure additional parameters using helper functions.
-% (Ensure that the helper function .m files (configure_angles.m,
-%  configure_sf_kf_ds.m, and configure_spatial_correlation.m) are on your MATLAB path.)
 b = configure_angles(b, config.perClusterAS_A, config.perClusterAS_D, config.perClusterES_A, config.perClusterES_D);
 b = configure_sf_kf_ds(b, config.KF_mu, config.KF_sigma, config.DS_us, config.DS_sigma, config.SF_sigma);
 b = configure_spatial_correlation(b, config.SC_lambda);
+
 
 %% Generate Channel Coefficients
 gen_parameters(b);

@@ -2,7 +2,7 @@ function builder = configure_angles(builder, perClusterAS_A, perClusterAS_D, per
 % CONFIGURE_ANGLES sets the per-cluster angular spread parameters.
 %
 % Inputs:
-%   builder         - QuaDRiGa channel builder object
+%   builder         - QuaDRiGa channel builder object (scalar or array)
 %   perClusterAS_A  - Per-cluster azimuth spread at the transmitter (degrees)
 %   perClusterAS_D  - Per-cluster azimuth spread at the receiver (degrees)
 %   perClusterES_A  - Per-cluster elevation spread at the transmitter (degrees)
@@ -10,12 +10,19 @@ function builder = configure_angles(builder, perClusterAS_A, perClusterAS_D, per
 %
 % Output:
 %   builder         - Modified builder with updated angular spread parameters.
-%
-% Note: These parameters limit the angular spread of each scattering cluster.
 
-builder.scenpar.PerClusterAS_A = perClusterAS_A;
-builder.scenpar.PerClusterAS_D = perClusterAS_D;
-builder.scenpar.PerClusterES_A = perClusterES_A;
-builder.scenpar.PerClusterES_D = perClusterES_D;
+if isscalar(builder)
+    builder.scenpar.PerClusterAS_A = perClusterAS_A;
+    builder.scenpar.PerClusterAS_D = perClusterAS_D;
+    builder.scenpar.PerClusterES_A = perClusterES_A;
+    builder.scenpar.PerClusterES_D = perClusterES_D;
+else
+    for idx = 1:numel(builder)
+        builder(idx).scenpar.PerClusterAS_A = perClusterAS_A;
+        builder(idx).scenpar.PerClusterAS_D = perClusterAS_D;
+        builder(idx).scenpar.PerClusterES_A = perClusterES_A;
+        builder(idx).scenpar.PerClusterES_D = perClusterES_D;
+    end
+end
 
 end
