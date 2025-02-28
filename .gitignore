@@ -6,13 +6,14 @@
 *.mat
 *.pkl
 *.asv
-.md
+prompt.md
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 reference/
-dataset/
+quadriga_src/
+tutorials/
 
 # C extensions
 *.so
