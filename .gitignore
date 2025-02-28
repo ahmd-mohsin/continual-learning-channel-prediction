@@ -1,6 +1,7 @@
 *Zone.Identifier
 *:Zone.Identifier
 .vscode/
+.DS_store
 
 # matlab
 *.mat
