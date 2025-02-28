@@ -15,6 +15,7 @@ __pycache__/
 reference/
 quadriga_src/
 tutorials/
+**/outputs/
 
 # C extensions
 *.so
