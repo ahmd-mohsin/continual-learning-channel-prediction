@@ -1,0 +1,35 @@
+function builder = configure_sf_kf_ds(builder, KF_mu, KF_sigma, DS_us, DS_sigma, SF_sigma)
+    % CONFIGURE_SF_KF_DS sets the shadow fading, K-Factor, and RMS delay spread parameters.
+    %
+    % Inputs:
+    %   builder   - QuaDRiGa channel builder object (scalar or array)
+    %   KF_mu     - Mean K-Factor (in dB)
+    %   KF_sigma  - Standard deviation of the K-Factor (in dB)
+    %   DS_us     - Median RMS delay spread in microseconds (will be converted to log10(seconds))
+    %   DS_sigma  - Standard deviation of log10(delay spread)
+    %   SF_sigma  - Standard deviation of shadow fading (in dB)
+    %
+    % Output:
+    %   builder   - Modified builder with updated SF, KF, and DS parameters.
+    %
+    % Note: DS_us is converted from microseconds to seconds and then to log10 scale.
+
+    if isscalar(builder)
+        builder.scenpar.KF_mu = KF_mu;
+        builder.scenpar.KF_sigma = KF_sigma;
+        builder.scenpar.DS_mu = log10(DS_us * 1e-6);
+        builder.scenpar.DS_sigma = DS_sigma;
+        builder.scenpar.SF_sigma = SF_sigma;
+    else
+
+        for idx = 1:numel(builder)
+            builder(idx).scenpar.KF_mu = KF_mu;
+            builder(idx).scenpar.KF_sigma = KF_sigma;
+            builder(idx).scenpar.DS_mu = log10(DS_us * 1e-6);
+            builder(idx).scenpar.DS_sigma = DS_sigma;
+            builder(idx).scenpar.SF_sigma = SF_sigma;
+        end
+
+    end
+
+end
