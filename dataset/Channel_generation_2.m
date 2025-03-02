@@ -22,10 +22,10 @@ port_mapping = [1,0; 0,1; 1,0; 0,1; 1,0; 0,1; 1,0; 0,1];
 port_mapping = [port_mapping, zeros(8,2); zeros(8,2), port_mapping] / 2;
 
 % BS antenna configuration for UMa (12° downtilt)
-aBS = qd_arrayant('3gpp-mmw', 4, 4, [], 6, 30, 0.5, 1, 2, 2.5, 2.5);
+aBS = qd_arrayant('3gpp-mmw', 4, 4, [], 6, 12, 0.5, 1, 2, 2.5, 2.5);
 aBS.coupling = port_mapping;
 aBS.combine_pattern;
-aBS.element_position(1,:) = 0.8;  % Distance from the pole (meters)
+aBS.element_position(1,:) = 0.5;  % Distance from the pole (meters)
 
 % Mobile Terminal (MT) antenna configuration 
 aMT = qd_arrayant('omni');
@@ -34,9 +34,9 @@ aMT.Fa(:,:,2) = 0;
 aMT.Fb(:,:,2) = 1;
 
 %% Simulation Parameters
-no_rx = 700;                   % Number of mobile terminals
+no_rx = 500;                   % Number of mobile terminals
 s = qd_simulation_parameters;  % General simulation parameters
-s.center_frequency = 8e9;      % Single carrier frequency: 6 GHz
+s.center_frequency = 6e9;      % Single carrier frequency: 6 GHz
 no_freq = 1;                   % Only one frequency is simulated
 s.use_3GPP_baseline = 1;       % Use 3GPP baseline (disable spherical waves)
 s.show_progress_bars = 1;      % Disable progress bars
@@ -50,7 +50,7 @@ l.name = 'UMa';
 
 %% Drop Users
 l.no_rx = no_rx;
-no_go_dist = 40;             
+no_go_dist = 35;             
 ind = true(1, no_rx);
 while any(ind)
     l.randomize_rx_positions(0.93*ISD, 1.5, 1.5, 0, ind);
@@ -60,7 +60,7 @@ end
 l.rx_position(3,:) = 2;
 % Assign UMa scenario parameters (80% indoor probability; outdoor users set to 1.5 m)
 indoor_rx = l.set_scenario('3GPP_38.901_UMa', [], [], 0.8);
-l.rx_position(3, ~indoor_rx) = 2.0;
+l.rx_position(3, ~indoor_rx) = 1.5;
 l.rx_array = aMT;
 
 %% Channel Generation
@@ -69,7 +69,7 @@ b = l.init_builder;
 for ib = 1:numel(b)
     [i1, i2] = qf.qind2sub(size(b), ib);
     scenpar = b(i1,i2).scenpar;
-    scenpar.SC_lambda = 0.4;  % Disable spatial consistency for SSF
+    scenpar.SC_lambda = 0.0;  % Disable spatial consistency for SSF
     b(i1,i2).scenpar_nocheck = scenpar;
 end
 b = split_multi_freq(b);  % Split builder per frequency (here only one)
@@ -100,7 +100,7 @@ for ir = 1:no_rx
 end
 
 % Save the extracted full channel matrix.
-save('output/H_full.mat','H_full');
+save('output/H_scenario_1.mat','H_full');
 
 %% Plotting Results
 
@@ -174,4 +174,4 @@ ylabel('CDF [%]');
 title(['Delay Spread CDF - ', l.name]);
 
 %% End of Script
-disp('Simulation complete. The full channel matrix H_full (Tx, Rx, users) is saved in output/H_full.mat');
+disp('Simulation complete. The full channel matrix H_scenario_x (Tx, Rx, users) is saved in output/H_full.mat');
