@@ -15,52 +15,52 @@ warning('off','all');
 if ~exist('output','dir')
     mkdir('output');
 end
-
+rng(0)
 %% Antenna Setup
 % Define port mapping for the BS antenna.
 port_mapping = [1,0; 0,1; 1,0; 0,1; 1,0; 0,1; 1,0; 0,1];
 port_mapping = [port_mapping, zeros(8,2); zeros(8,2), port_mapping] / 2;
 
 % BS antenna configuration for UMa (12° downtilt)
-aBS = qd_arrayant('3gpp-mmw', 4, 4, [], 6, 12, 0.5, 1, 2, 2.5, 2.5);
+aBS = qd_arrayant('3gpp-mmw', 4, 4, [], 6, 30, 0.5, 1, 2, 2.5, 2.5);
 aBS.coupling = port_mapping;
 aBS.combine_pattern;
-aBS.element_position(1,:) = 0.5;  % Distance from the pole (meters)
+aBS.element_position(1,:) = 0.8;  % Distance from the pole (meters)
 
-% Mobile Terminal (MT) antenna configuration (omni-directional)
+% Mobile Terminal (MT) antenna configuration 
 aMT = qd_arrayant('omni');
 aMT.copy_element(1,2);
 aMT.Fa(:,:,2) = 0;
 aMT.Fb(:,:,2) = 1;
 
 %% Simulation Parameters
-no_rx = 500;                   % Number of mobile terminals
+no_rx = 700;                   % Number of mobile terminals
 s = qd_simulation_parameters;  % General simulation parameters
-s.center_frequency = 6e9;      % Single carrier frequency: 6 GHz
+s.center_frequency = 8e9;      % Single carrier frequency: 6 GHz
 no_freq = 1;                   % Only one frequency is simulated
 s.use_3GPP_baseline = 1;       % Use 3GPP baseline (disable spherical waves)
-s.show_progress_bars = 0;      % Disable progress bars
+s.show_progress_bars = 1;      % Disable progress bars
 
 %% Layout Generation: Single BS UMa
-ISD = 500;  % Inter-site distance (sets the scale)
+ISD = 700;  % Inter-site distance (sets the scale)
 l = qd_layout.generate('regular', 1, ISD, aBS);
 l.simpar = s;
-l.tx_position(3,:) = 25;       % BS height (25 m typical for UMa)
+l.tx_position(3,:) = 20;       
 l.name = 'UMa';
 
 %% Drop Users
 l.no_rx = no_rx;
-no_go_dist = 35;             % Minimum 2D distance from the BS
+no_go_dist = 40;             
 ind = true(1, no_rx);
 while any(ind)
     l.randomize_rx_positions(0.93*ISD, 1.5, 1.5, 0, ind);
     ind = sqrt(l.rx_position(1,:).^2 + l.rx_position(2,:).^2) < no_go_dist;
 end
 % Set user heights (outdoor users: 1.5 m tall)
-l.rx_position(3,:) = 1.5;
+l.rx_position(3,:) = 2;
 % Assign UMa scenario parameters (80% indoor probability; outdoor users set to 1.5 m)
 indoor_rx = l.set_scenario('3GPP_38.901_UMa', [], [], 0.8);
-l.rx_position(3, ~indoor_rx) = 1.5;
+l.rx_position(3, ~indoor_rx) = 2.0;
 l.rx_array = aMT;
 
 %% Channel Generation
@@ -69,7 +69,7 @@ b = l.init_builder;
 for ib = 1:numel(b)
     [i1, i2] = qf.qind2sub(size(b), ib);
     scenpar = b(i1,i2).scenpar;
-    scenpar.SC_lambda = 0;  % Disable spatial consistency for SSF
+    scenpar.SC_lambda = 0.4;  % Disable spatial consistency for SSF
     b(i1,i2).scenpar_nocheck = scenpar;
 end
 b = split_multi_freq(b);  % Split builder per frequency (here only one)
@@ -145,6 +145,7 @@ end
 plot(bins_sinr, 100*qf.acdf(sinr, bins_sinr), 'r-', 'LineWidth',2);
 grid on; box on;
 xlabel('Wideband SINR (dB)');
+xlim([-10 10])
 ylabel('CDF [%]');
 title(['Wideband SINR CDF - ', l.name]);
 
