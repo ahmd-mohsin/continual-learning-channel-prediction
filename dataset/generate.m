@@ -1,12 +1,3 @@
-try
-    if isempty(gcp('nocreate'))
-        parpool('local');
-        disp('Parallel processing enabled.');
-    end
-catch
-    warning('Parallel Computing Toolbox not available. Running in serial mode.');
-end
-
 seed = 42;
 rng(seed);
 disp(['Using random seed: ', num2str(seed)]);
