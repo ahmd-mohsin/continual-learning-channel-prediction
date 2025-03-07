@@ -2,6 +2,7 @@
 *:Zone.Identifier
 .vscode/
 .DS_store
+prompts/
 
 # matlab
 *.mat
