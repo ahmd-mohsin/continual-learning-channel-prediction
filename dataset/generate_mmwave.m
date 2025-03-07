@@ -5,7 +5,7 @@ function generate_mmwave(seed)
     end
     
     % mmWave scenario parameters
-    no_rx = 128;
+    no_rx = 64;
     no_time_samples = 30;
     no_resource_blocks = 18; % truncated
     bandwidth = 400e6;
@@ -14,19 +14,14 @@ function generate_mmwave(seed)
     % Define different antenna configurations for mmWave
     configs = {
         % Config 1: ULA (Uniform Linear Array)
-        struct('name', 'ULA', 'M', 16, 'N', 1, 'pol', 3, 'tilt', 10, 'spacing', 0.5, ...
+        struct('name', 'ULA', 'M', 8, 'N', 1, 'pol', 3, 'tilt', 10, 'spacing', 0.5, ...
                'nested_M', 1, 'nested_N', 1, 'panel_spacing_v', 1, 'panel_spacing_h', 1, ...
                'rx_type', 'dipole', 'rx_elements', 2, 'rx_pol', '+/-45°'),
         
         % Config 2: URA (Uniform Rectangular Array)
-        struct('name', 'URA', 'M', 8, 'N', 8, 'pol', 3, 'tilt', 15, 'spacing', 0.5, ...
+        struct('name', 'URA', 'M', 4, 'N', 4, 'pol', 3, 'tilt', 15, 'spacing', 0.5, ...
                'nested_M', 1, 'nested_N', 1, 'panel_spacing_v', 1, 'panel_spacing_h', 1, ...
                'rx_type', 'patch', 'rx_elements', 2, 'rx_pol', 'H/V'),
-        
-        % Config 3: Nested arrays for beamforming
-        struct('name', 'nested', 'M', 4, 'N', 4, 'pol', 3, 'tilt', 10, 'spacing', 0.5, ...
-               'nested_M', 2, 'nested_N', 2, 'panel_spacing_v', 2, 'panel_spacing_h', 2, ...
-               'rx_type', 'xpol', 'rx_elements', 2, 'rx_pol', '+/-45°')
     };
     
     % Loop through each configuration
