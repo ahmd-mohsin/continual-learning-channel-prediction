@@ -9,4 +9,5 @@ dependencies = [
     "h5py>=3.13.0",
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.0",
+    "scipy>=1.15.2",
 ]
