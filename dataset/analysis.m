@@ -107,7 +107,7 @@ for i = 1:length(config_names)
 end
 
 grid on;
-xlabel('Channel Magnitude');
+xlabel('Channel Gain');
 ylabel('Probability');
-title('Distribution of Channel Magnitudes for Different UMa Configurations');
+title('Distribution of Channel Gain for Different UMa Configurations');
 legend('Location', 'best');
