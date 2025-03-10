@@ -11,6 +11,11 @@ function generate_indoor(seed)
     bandwidth = 80e6;
     center_frequency = 5e9;
     
+    % Transmit power (dBm)
+    TxPower_dBm = 35;
+    % Convert from dBm offset to amplitude scale factor
+    amplitudeScale = 10^(TxPower_dBm / 20);
+
     % Define different antenna configurations for Indoor
     configs = {
         % Config 1: Standard indoor with dual-polarized antennas
@@ -111,6 +116,10 @@ function generate_indoor(seed)
         % Process channels
         for rx_idx = 1:no_rx
             freq_channel = c(rx_idx).fr(bandwidth, no_resource_blocks);
+            
+            % Apply 35 dBm amplitude scaling
+            freq_channel = freq_channel * amplitudeScale;
+            
             for time_idx = 1:min(no_time_samples, size(freq_channel, 4))
                 for tx_ant = 1:no_tx_ant
                     for rb = 1:no_resource_blocks

@@ -11,6 +11,11 @@ function generate_uma(seed)
     bandwidth = 20e6;
     center_frequency = 2.6e9;
     
+    % Transmit power (dBm)
+    TxPower_dBm = 35;
+    % Convert from 35 dBm offset to amplitude scale factor
+    amplitudeScale = 10^(TxPower_dBm / 20);
+
     % Define different antenna configurations for UMa
     configs = {
         % Config 1: Medium array with +/-45° polarization
@@ -44,9 +49,11 @@ function generate_uma(seed)
         l = qd_layout(s);
         
         % Configure transmitter antenna array
-        l.tx_array = qd_arrayant('3gpp-3d', config.M, config.N, center_frequency, config.pol, config.tilt, config.spacing);
+        l.tx_array = qd_arrayant('3gpp-3d', config.M, config.N, ...
+            center_frequency, config.pol, config.tilt, config.spacing);
         no_tx_ant = l.tx_array.no_elements;
-        fprintf('UMa config %s: Using %d transmit antenna elements\n', config.name, no_tx_ant);
+        fprintf('UMa config %s: Using %d transmit antenna elements\n', ...
+            config.name, no_tx_ant);
         
         % Configure receiver antenna array
         switch config.rx_type
@@ -74,7 +81,8 @@ function generate_uma(seed)
 
         no_rx_ant = l.rx_array.no_elements;
         l.tx_position = [0; 0; 25];
-        channel_matrix = complex(zeros(no_time_samples, no_tx_ant, no_resource_blocks, no_rx_ant, no_rx));
+        channel_matrix = complex(zeros(no_time_samples, no_tx_ant, ...
+            no_resource_blocks, no_rx_ant, no_rx));
         l.no_rx = no_rx;
         
         % Create user tracks
@@ -108,9 +116,13 @@ function generate_uma(seed)
         % Generate channels
         c = l.get_channels();
         
-        % Process channels
+        % Process channels (apply +35 dBm offset)
         for rx_idx = 1:no_rx
             freq_channel = c(rx_idx).fr(bandwidth, no_resource_blocks);
+            
+            % Multiply by amplitude scale
+            freq_channel = freq_channel * amplitudeScale;
+            
             for time_idx = 1:min(no_time_samples, size(freq_channel, 4))
                 for tx_ant = 1:no_tx_ant
                     for rb = 1:no_resource_blocks
@@ -124,10 +136,12 @@ function generate_uma(seed)
         end
         
         % Save to file with descriptive name
-        filename = sprintf('outputs/uma_%s_conf_%dtx_%drx.mat', config.name, no_tx_ant, no_rx_ant);
+        filename = sprintf('outputs/uma_%s_conf_%dtx_%drx.mat', ...
+            config.name, no_tx_ant, no_rx_ant);
         save(filename, 'channel_matrix', 'config');
         fprintf('UMa dataset saved to %s with dimensions: [%d, %d, %d, %d, %d]\n', ...
-            filename, size(channel_matrix, 1), size(channel_matrix, 2), size(channel_matrix, 3), ...
-            size(channel_matrix, 4), size(channel_matrix, 5));
+            filename, size(channel_matrix, 1), size(channel_matrix, 2), ...
+            size(channel_matrix, 3), size(channel_matrix, 4), ...
+            size(channel_matrix, 5));
     end
 end

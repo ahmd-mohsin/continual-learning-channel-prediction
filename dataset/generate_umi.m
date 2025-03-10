@@ -11,6 +11,11 @@ function generate_umi(seed)
     bandwidth = 100e6;
     center_frequency = 3.5e9;
     
+    % Transmit power setting (in dBm)
+    TxPower_dBm = 35; 
+    % Convert to an amplitude scale factor (since channel coefficients are in volt-scale)
+    amplitudeScale = 10^(TxPower_dBm/20);
+
     % Define different antenna configurations for UMi
     configs = {
         % Config 1: Standard UMi with +/-45° polarization
@@ -109,9 +114,13 @@ function generate_umi(seed)
         % Generate channels
         c = l.get_channels();
         
-        % Process channels
+        % Process channels (applying Tx-power scaling)
         for rx_idx = 1:no_rx
             freq_channel = c(rx_idx).fr(bandwidth, no_resource_blocks);
+            
+            % Scale the amplitude by 35 dBm offset from 0 dBm
+            freq_channel = freq_channel * amplitudeScale;
+            
             for time_idx = 1:min(no_time_samples, size(freq_channel, 4))
                 for tx_ant = 1:no_tx_ant
                     for rb = 1:no_resource_blocks
