@@ -11,11 +11,6 @@ function generate_uma(seed)
     bandwidth = 20e6;
     center_frequency = 2.6e9;
     
-    % Transmit power (dBm)
-    TxPower_dBm = 35;
-    % Convert from 35 dBm offset to amplitude scale factor
-    amplitudeScale = 10^(TxPower_dBm / 20);
-
     % Define different antenna configurations for UMa
     configs = {
         % Config 1: Medium array with +/-45° polarization
@@ -81,6 +76,8 @@ function generate_uma(seed)
 
         no_rx_ant = l.rx_array.no_elements;
         l.tx_position = [0; 0; 25];
+        
+        % Prepare storage for channel outputs
         channel_matrix = complex(zeros(no_time_samples, no_tx_ant, ...
             no_resource_blocks, no_rx_ant, no_rx));
         l.no_rx = no_rx;
@@ -116,32 +113,11 @@ function generate_uma(seed)
         % Generate channels
         c = l.get_channels();
         
-        % Process channels (apply +35 dBm offset)
+        % Process channels (no TX-power scaling)
         for rx_idx = 1:no_rx
             freq_channel = c(rx_idx).fr(bandwidth, no_resource_blocks);
-            
-            % Multiply by amplitude scale
-            freq_channel = freq_channel * amplitudeScale;
-            
             for time_idx = 1:min(no_time_samples, size(freq_channel, 4))
                 for tx_ant = 1:no_tx_ant
                     for rb = 1:no_resource_blocks
                         for rx_ant = 1:no_rx_ant
-                            channel_matrix(time_idx, tx_ant, rb, rx_ant, rx_idx) = ...
-                                freq_channel(rx_ant, tx_ant, rb, time_idx);
-                        end
-                    end
-                end
-            end
-        end
-        
-        % Save to file with descriptive name
-        filename = sprintf('outputs/uma_%s_conf_%dtx_%drx.mat', ...
-            config.name, no_tx_ant, no_rx_ant);
-        save(filename, 'channel_matrix', 'config');
-        fprintf('UMa dataset saved to %s with dimensions: [%d, %d, %d, %d, %d]\n', ...
-            filename, size(channel_matrix, 1), size(channel_matrix, 2), ...
-            size(channel_matrix, 3), size(channel_matrix, 4), ...
-            size(channel_matrix, 5));
-    end
-end
+      
