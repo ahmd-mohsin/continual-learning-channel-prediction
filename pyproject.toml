@@ -10,4 +10,13 @@ dependencies = [
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.0",
     "scipy>=1.15.2",
+    "scs>=3.2.7.post2",
+    "cvxpy==1.6.2",
+    "ecos>=2.0.14",
+    "pandas>=2.2.3",
+    "numpy>=2.2.3",
+    "mosek>=11.0.12",
+    "dccp>=1.0.5",
+    "pillow>=11.1.0",
+    "cv2==4.11.0.86",
 ]
