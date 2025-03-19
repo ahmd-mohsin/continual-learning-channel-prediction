@@ -10,13 +10,11 @@ class ChannelDataset(Dataset):
         if isinstance(channel_data, torch.Tensor):
             self.data = channel_data  
         else:
-            
             self.data = torch.tensor(channel_data, dtype=torch.cdouble) 
         
         self.real = self.data.real.float()
         self.imag = self.data.imag.float()
         
-       
         self.num_users = self.data.shape[0]    
         self.time_length = self.data.shape[-1] 
         self.total_samples = self.num_users * (self.time_length - 1)
@@ -34,3 +32,4 @@ class ChannelDataset(Dataset):
         X = torch.cat([X_real, X_imag], dim=0)
         Y = torch.cat([Y_real, Y_imag], dim=0)
         return X, Y
+
