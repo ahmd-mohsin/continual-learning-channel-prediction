@@ -6,10 +6,10 @@ function generate_umi(seed)
     
     % UMi scenario parameters
     no_rx = 256;
-    no_time_samples = 30;
+    no_time_samples = 3000;
     no_resource_blocks = 18; % truncated
     bandwidth = 100e6;
-    center_frequency = 3.5e9;
+    center_frequency = 5e9;
     
     % Define different antenna configurations for UMi
     configs = {
@@ -131,7 +131,7 @@ function generate_umi(seed)
         % Save to file with descriptive name
         filename = sprintf('outputs/umi_%s_conf_%dtx_%drx.mat', ...
             config.name, no_tx_ant, no_rx_ant);
-        save(filename, 'channel_matrix', 'config');
+        save(filename, 'channel_matrix', 'config', '-v7.3');
         fprintf('UMi dataset saved to %s with dimensions: [%d, %d, %d, %d, %d]\n', ...
             filename, size(channel_matrix, 1), size(channel_matrix, 2), ...
             size(channel_matrix, 3), size(channel_matrix, 4), size(channel_matrix, 5));
