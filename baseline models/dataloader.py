@@ -11,9 +11,10 @@ class ChannelDataset(Dataset):
         super().__init__()
         
         # channel_matrix: shape (256, 2, 18, 8, 3000), complex128
-        real_data = channel_matrix.real  # shape (256, 2, 18, 8, 3000)
+        real_data = channel_matrix.real  # shape (256, 2, 18, 8, 3000)   
         imag_data = channel_matrix.imag  # shape (256, 2, 18, 8, 3000)
-        
+        # user gives in batch
+        # input is (batch, 2,18,8,3000), output is (batch, 2,8,18)
         # Stack real and imaginary along a new last dimension = 2
         # shape => (256, 2, 18, 8, 3000, 2)
         self.data = torch.from_numpy(
