@@ -18,5 +18,5 @@ dependencies = [
     "mosek>=11.0.12",
     "dccp>=1.0.5",
     "pillow>=11.1.0",
-    "cv2==4.11.0.86",
+    "torchvision>=0.21.0",
 ]
