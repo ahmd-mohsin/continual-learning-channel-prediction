@@ -1,51 +1,36 @@
 import torch
-import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 class ChannelDataset(Dataset):
-    """
-    A dataset that provides pairs (H(t), H(t+1)) for each user and time t.
-    channel_matrix shape is assumed to be (num_users, rx_ant, nRB, tx_ant, time).
-    """
-    def __init__(self, channel_matrix):
-        super().__init__()
+    def __init__(self, channel_data):
+        """
+        channel_data: a NumPy array or Torch tensor of shape (256, 2, 18, 8, 3000),
+                      representing [user, rx_ant, RB, tx_ant, time].
+        """
+        if isinstance(channel_data, torch.Tensor):
+            self.data = channel_data  
+        else:
+            
+            self.data = torch.tensor(channel_data, dtype=torch.cdouble) 
         
-        # channel_matrix: shape (256, 2, 18, 8, 3000), complex128
-        real_data = channel_matrix.real  # shape (256, 2, 18, 8, 3000)   
-        imag_data = channel_matrix.imag  # shape (256, 2, 18, 8, 3000)
-        # user gives in batch
-        # input is (batch, 2,18,8,3000), output is (batch, 2,8,18)
-        # Stack real and imaginary along a new last dimension = 2
-        # shape => (256, 2, 18, 8, 3000, 2)
-        self.data = torch.from_numpy(
-            np.stack([real_data, imag_data], axis=-1)
-        ).float()
-        self.num_users = self.data.shape[0]  # 256
-        self.num_times = self.data.shape[4]  # 3000
+        self.real = self.data.real.float()
+        self.imag = self.data.imag.float()
         
-        self.indices = []
-        for u in range(self.num_users):             
-            for t in range(self.num_times - 1):     
-                self.indices.append((u, t))
-
+       
+        self.num_users = self.data.shape[0]    
+        self.time_length = self.data.shape[-1] 
+        self.total_samples = self.num_users * (self.time_length - 1)
+    
     def __len__(self):
-        # Total number of (user, time) pairs
-        return len(self.indices)
-
+        return self.total_samples
+    
     def __getitem__(self, idx):
-        """
-        Returns a tuple: (input_tensor, target_tensor)
-
-        input_tensor = H(t)   -> shape (2, 18, 8, 2)
-        target_tensor = H(t+1)-> shape (2, 18, 8, 2)
-        """
-        u, t = self.indices[idx]
-        h_t = self.data[u, :, :, :, t, :]   
-        h_next = self.data[u, :, :, :, t+1, :] 
-        h_t = h_t.permute(0, 3, 1, 2)  # => (2, 2, 18, 8)
-        h_t = h_t.reshape(4, 18, 8)   # => (4, 18, 8)
-
-        h_next = h_next.permute(0, 3, 1, 2)  # => (2, 2, 18, 8)
-        h_next = h_next.reshape(4, 18, 8)   # => (4, 18, 8)
-
-        return h_t, h_next
+        user_idx = idx // (self.time_length - 1)
+        t = idx % (self.time_length - 1)
+        X_real = self.real[user_idx, :, :, :, t]   # shape (2, 18, 8)
+        X_imag = self.imag[user_idx, :, :, :, t]   # shape (2, 18, 8)
+        Y_real = self.real[user_idx, :, :, :, t+1] # shape (2, 18, 8)
+        Y_imag = self.imag[user_idx, :, :, :, t+1] # shape (2, 18, 8)
+        X = torch.cat([X_real, X_imag], dim=0)
+        Y = torch.cat([Y_real, Y_imag], dim=0)
+        return X, Y
