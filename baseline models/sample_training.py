@@ -39,7 +39,7 @@ class CustomLSTMModel(nn.Module):
 
 # Define model parameters
 input_size = 1  # Each time step has one feature
-hidden_size = 8
+hidden_size = 16
 num_layers = 2
 output_size = 1  # Predicting one value per unit
 
@@ -57,7 +57,8 @@ output_tensor = torch.randn(batch_size, 2, 8, 18).to(device)  # (batch, 2, 8, 18
 print("Batch Size:", batch_size)
 print("Input Shape:", input_tensor.shape)
 print("Output Shape:", output_tensor.shape)
-
+total_params = sum(p.numel() for p in model.parameters())
+print("Total Parameters:", total_params)
 
 # Training Loop
 num_epochs = 100
