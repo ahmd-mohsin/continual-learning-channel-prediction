@@ -164,6 +164,8 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
             progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
 
             for batch_idx, (X_batch, Y_batch) in enumerate(progress_bar):
+                # if batch_idx > 500:
+                #     break
                 X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)  # Move to GPU if available
                 optimizer.zero_grad()
                 
@@ -266,7 +268,7 @@ def main():
     # model = LSTMChannelPredictor(in_channels=4, out_channels=4, hidden_dim=256, num_layers=2).to(device)
     input_size = 1  # Each time step has one feature
     hidden_size = 16
-    num_layers = 32
+    num_layers = 16
     output_size = 1  # Predicting one value per unit
 
     # Initialize model and move to device
