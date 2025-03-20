@@ -19,4 +19,6 @@ dependencies = [
     "dccp>=1.0.5",
     "pillow>=11.1.0",
     "torchvision>=0.21.0",
+    "tqdm>=4.67.1",
+    "tensorboard>=2.19.0",
 ]

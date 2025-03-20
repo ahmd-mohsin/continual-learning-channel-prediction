@@ -25,22 +25,23 @@ class ChannelSequenceDataset(Dataset):
         return self.num_users
     
     def __getitem__(self, idx):
-        # For user idx, get the full time sequence (except the last sample) as input,
-        # and the final channel state as the target.
-        # Each “time sample” is converted into a 4-channel tensor (2 channels for real, 2 channels for imag).
+        # Create pairs of consecutive samples for prediction
+        # This sets up the (t-1) → t prediction task
         
-        # Input sequence: (time_length-1, 2, 18, 8) for real and same for imag.
-        X_real = self.real[idx, :, :, :, :-1]  # shape: (2, 18, 8, time_length-1)
-        X_imag = self.imag[idx, :, :, :, :-1]   # shape: (2, 18, 8, time_length-1)
-        # Permute so that time dimension comes first: (time_length-1, 2, 18, 8)
-        X_real = X_real.permute(3, 0, 1, 2)
-        X_imag = X_imag.permute(3, 0, 1, 2)
-        # Concatenate along the channel dimension: (time_length-1, 4, 18, 8)
-        X = torch.cat([X_real, X_imag], dim=1)
+        # We'll return multiple pairs across the time sequence
+        time_pairs = self.time_length - 1
+        X = torch.zeros(time_pairs, 4, 18, 8)
+        Y = torch.zeros(time_pairs, 4, 18, 8)
         
-        # Target: channel state at the final time sample (t=T-1)
-        Y_real = self.real[idx, :, :, :, -1]  # shape: (2, 18, 8)
-        Y_imag = self.imag[idx, :, :, :, -1]  # shape: (2, 18, 8)
-        Y = torch.cat([Y_real, Y_imag], dim=0)  # shape: (4, 18, 8)
+        for t in range(time_pairs):
+            # Input: channel at time t
+            X_real_t = self.real[idx, :, :, :, t]  # (2, 18, 8)
+            X_imag_t = self.imag[idx, :, :, :, t]  # (2, 18, 8)
+            X[t] = torch.cat([X_real_t, X_imag_t], dim=0)  # (4, 18, 8)
+            
+            # Target: channel at time t+1
+            Y_real_t = self.real[idx, :, :, :, t+1]  # (2, 18, 8)
+            Y_imag_t = self.imag[idx, :, :, :, t+1]  # (2, 18, 8)
+            Y[t] = torch.cat([Y_real_t, Y_imag_t], dim=0)  # (4, 18, 8)
         
         return X, Y
