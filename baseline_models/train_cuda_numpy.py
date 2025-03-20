@@ -7,34 +7,124 @@ import numpy as np
 import os
 from tqdm import tqdm
 import argparse
+from torch.utils.data import Dataset, DataLoader
+
 
 # Import your dataset and model
-from dataloader import ChannelSequenceDataset
+# from dataloader import ChannelSequenceDataset
 from effecientnet import LSTMChannelPredictor
 
-
-def load_data(file_extension, device):
-    default_path = "/Users/muahmed/Desktop/Globecom 2025/nas-wireless/dataset/outputs/umi_compact_conf_8tx_2rx."
-    file_path = default_path + file_extension
+class CustomLSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, output_size):
+        super(CustomLSTMModel, self).__init__()
+        
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
     
-    if file_extension == "npy":
-        default_path = "../dataset/outputs/umi_compact_conf_8tx_2rx.mat."
-        file_path = default_path + file_extension
-        print(f"Loading data from {file_path} (NumPy format)...")
-        channel_matrix = np.load(file_path)
-        print(f"Loaded {file_path}")
-    elif file_extension == "mat":
-        print(f"Loading data from {file_path} (MATLAB format)...")
-        with h5py.File(file_path, "r") as f:
-            channel_group = f["channel_matrix"]
-            real_data = np.array(channel_group["real"])
-            imag_data = np.array(channel_group["imag"])
-            channel_matrix = real_data + 1j * imag_data
-    else:
-        raise ValueError("Unsupported file format. Please provide a valid extension: npy or mat.")
-    print(f"Channel matrix shape: {channel_matrix.shape}")
-    channel_matrix = torch.tensor(channel_matrix, dtype=torch.cdouble, device=device)  # Move to CUDA immediately
-    return channel_matrix
+    def forward(self, x):
+        batch_size, channels, height, width, time_steps = x.shape  # (batch, 2, 18, 8, 3000)
+        
+        # Move input tensor to device
+        x = x
+        
+        # Reshape to feed into LSTM
+        x = x.view(batch_size * channels * height * width, time_steps, -1)  # (batch * 2 * 18 * 8, 3000, feature_dim)
+        
+        # Pass through LSTM
+        lstm_out, _ = self.lstm(x)
+        
+        # Get the last time step output
+        lstm_out = lstm_out[:, -1, :]  # (batch * 2 * 18 * 8, hidden_size)
+        
+        # Fully connected layer to match output shape
+        out = self.fc(lstm_out)  # (batch * 2 * 18 * 8, output_size)
+        
+        # Reshape to match desired output
+        out = out.view(batch_size, channels, width, height)  # (batch, 2, 8, 18)
+        
+        return out
+
+
+class ChannelSequenceDataset(Dataset):
+    def __init__(self, file_path, file_extension, device):
+        self.file_path = file_path + file_extension
+        self.file_extension = file_extension
+        self.device = device
+        
+        if self.file_extension == "npy":
+            self.data = np.load(self.file_path, mmap_mode='r')
+            self.num_users = self.data.shape[0]
+            self.time_length = self.data.shape[-1]
+        elif self.file_extension == "mat":
+            with h5py.File(self.file_path, "r") as f:
+                self.num_users = f["channel_matrix"].shape[0]
+                self.time_length = f["channel_matrix"].shape[-1]
+        else:
+            raise ValueError("Unsupported file format. Please use npy or mat.")
+    
+    # def __len__(self):
+    #     return self.num_users
+    
+    def __len__(self):
+        # Each sample has (3000 - 9) valid indices to extract overlapping sequences
+        return self.num_samples * (self.num_timestamps - 9)
+
+    def __getitem__(self, idx):
+        """
+        Returns:
+            input  -> (2, 18, 8, 8)  (8 time steps)
+            output -> (2, 18, 8)    (1 next time step)
+        """
+        sample_idx = idx // (self.num_timestamps - 9)  # Extract sample index (which of the 256 samples)
+        time_idx = idx % (self.num_timestamps - 9)     # Extract time index within the sample
+
+        input_data = self.data[sample_idx, :, :, :, time_idx:time_idx+8]  # Shape: (2, 18, 8, 8)
+        output_data = self.data[sample_idx, :, :, :, time_idx+8]  # Shape: (2, 18, 8)
+
+        return input_data, output_data
+    # def __getitem__(self, idx):
+        
+    #     if self.file_extension == "npy":
+    #         data = self.data[idx]
+    #         real_data = torch.tensor(data.real, device=self.device)
+    #         imag_data = torch.tensor(data.imag, device=self.device)
+    #     else:
+    #         with h5py.File(self.file_path, "r") as f:
+    #             real_data = torch.tensor(np.array(f["channel_matrix"]["real"])[idx], device=self.device)
+    #             imag_data = torch.tensor(np.array(f["channel_matrix"]["imag"])[idx], device=self.device)
+        
+    #     time_pairs = self.time_length - 1
+    #     X = torch.zeros(time_pairs, 4, 18, 8, device=self.device)
+    #     Y = torch.zeros(time_pairs, 4, 18, 8, device=self.device)
+        
+    #     for t in range(time_pairs):
+    #         X[t] = torch.cat([real_data[:, :, :, t], imag_data[:, :, :, t]], dim=0)
+    #         Y[t] = torch.cat([real_data[:, :, :, t+1], imag_data[:, :, :, t+1]], dim=0)
+        
+    #     return X, Y
+
+# def load_data(file_extension, device):
+#     default_path = "/Users/muahmed/Desktop/Globecom 2025/nas-wireless/dataset/outputs/umi_compact_conf_8tx_2rx."
+#     file_path = default_path + file_extension
+    
+#     if file_extension == "npy":
+#         default_path = "../dataset/outputs/umi_compact_conf_8tx_2rx.mat."
+#         file_path = default_path + file_extension
+#         print(f"Loading data from {file_path} (NumPy format)...")
+#         channel_matrix = np.load(file_path)
+#         print(f"Loaded {file_path}")
+#     elif file_extension == "mat":
+#         print(f"Loading data from {file_path} (MATLAB format)...")
+#         with h5py.File(file_path, "r") as f:
+#             channel_group = f["channel_matrix"]
+#             real_data = np.array(channel_group["real"])
+#             imag_data = np.array(channel_group["imag"])
+#             channel_matrix = real_data + 1j * imag_data
+#     else:
+#         raise ValueError("Unsupported file format. Please provide a valid extension: npy or mat.")
+#     print(f"Channel matrix shape: {channel_matrix.shape}")
+#     channel_matrix = torch.tensor(channel_matrix, dtype=torch.cdouble, device=device)  # Move to CUDA immediately
+#     return channel_matrix
 
 def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3):
     # Define loss function and optimizer
@@ -71,7 +161,9 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3):
                 
                 # Detach hidden state from graph to prevent backprop through entire sequence
                 hidden = (hidden[0].detach(), hidden[1].detach())
-                
+                print("pred: ",pred.shape)
+                print("Y_t:  ",Y_t.shape)
+                print("X_t:  ",X_t.shape)
                 # Calculate loss
                 loss = criterion(pred, Y_t)
                 loss.backward()
@@ -156,24 +248,23 @@ def main():
     torch.manual_seed(42)
     
     device = compute_device()
+    # file_path = "../dataset/outputs/umi_compact_conf_8tx_2rx."
     
-    channel_matrix = load_data(args.ext, device)
-    print("Channel matrix loaded")
-    full_dataset = ChannelSequenceDataset(channel_matrix, device)
-    print("Loaded dataset")
+    file_path = "../dataset/outputs/umi_compact_conf_8tx_2rx.mat."
+    full_dataset = ChannelSequenceDataset(file_path, args.ext, device)
+    
     train_size = int(0.8 * len(full_dataset))
     val_size = len(full_dataset) - train_size
     
     train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
     
-    print("Dataset split into training and validation sets")
     batch_size = 4
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     
     print(f"Created dataloaders with batch size {batch_size}")
     
-    model = LSTMChannelPredictor(in_channels=4, out_channels=4, hidden_dim=32, num_layers=2).to(device)
+    model = LSTMChannelPredictor(in_channels=4, out_channels=4, hidden_dim=256, num_layers=2).to(device)
     
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params}")
