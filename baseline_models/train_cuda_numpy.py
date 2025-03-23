@@ -170,6 +170,8 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
             progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
 
             for batch_idx, (X_batch, Y_batch) in enumerate(progress_bar):
+                # if batch_idx > 10 :
+                #     break
                 X_batch, Y_batch = X_batch.to(device), Y_batch.to(device) 
                 optimizer.zero_grad()
                 
@@ -183,8 +185,8 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
                 # print("Y_batch", Y_batch.shape)
                 # print("predictions", predictions.shape)
 
-                loss.backward()
-                optimizer.step()
+                # loss.backward()
+                # optimizer.step()
 
                 batch_loss = loss.item()
                 total_loss += batch_loss
