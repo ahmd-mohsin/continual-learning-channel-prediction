@@ -75,13 +75,12 @@ class LSTMChannelPredictor(nn.Module):
         """
         batch_size = x.size(0)
         
-        # Extract spatial features (batch, 256, 18, 8)
+        
         features = self.cnn_encoder(x)
         
-        # Reshape for LSTM input (batch, 1, feature_dim)
+        
         features = features.view(batch_size, 1, -1)
         
-        # Pass through LSTM
         if hidden is None:
             lstm_out, hidden = self.lstm(features)
         else:

@@ -99,49 +99,6 @@ class ChannelSequenceDataset(Dataset):
         output_data = torch.cat([real_output, imag_output], dim=0)  # Shape: (4, 18, self.overlapping_index)
 
         return input_data, output_data
-    # def __getitem__(self, idx):
-        
-    #     if self.file_extension == "npy":
-    #         data = self.data[idx]
-    #         real_data = torch.tensor(data.real, device=self.device)
-    #         imag_data = torch.tensor(data.imag, device=self.device)
-    #     else:
-    #         with h5py.File(self.file_path, "r") as f:
-    #             real_data = torch.tensor(np.array(f["channel_matrix"]["real"])[idx], device=self.device)
-    #             imag_data = torch.tensor(np.array(f["channel_matrix"]["imag"])[idx], device=self.device)
-        
-    #     time_pairs = self.time_length - 1
-    #     X = torch.zeros(time_pairs, 4, 18, 8, device=self.device)
-    #     Y = torch.zeros(time_pairs, 4, 18, 8, device=self.device)
-        
-    #     for t in range(time_pairs):
-    #         X[t] = torch.cat([real_data[:, :, :, t], imag_data[:, :, :, t]], dim=0)
-    #         Y[t] = torch.cat([real_data[:, :, :, t+1], imag_data[:, :, :, t+1]], dim=0)
-        
-    #     return X, Y
-
-# def load_data(file_extension, device):
-#     default_path = "/Users/muahmed/Desktop/Globecom 2025/nas-wireless/dataset/outputs/umi_compact_conf_8tx_2rx."
-#     file_path = default_path + file_extension
-    
-#     if file_extension == "npy":
-#         default_path = "../dataset/outputs/umi_compact_conf_8tx_2rx.mat."
-#         file_path = default_path + file_extension
-#         print(f"Loading data from {file_path} (NumPy format)...")
-#         channel_matrix = np.load(file_path)
-#         print(f"Loaded {file_path}")
-#     elif file_extension == "mat":
-#         print(f"Loading data from {file_path} (MATLAB format)...")
-#         with h5py.File(file_path, "r") as f:
-#             channel_group = f["channel_matrix"]
-#             real_data = np.array(channel_group["real"])
-#             imag_data = np.array(channel_group["imag"])
-#             channel_matrix = real_data + 1j * imag_data
-#     else:
-#         raise ValueError("Unsupported file format. Please provide a valid extension: npy or mat.")
-#     print(f"Channel matrix shape: {channel_matrix.shape}")
-#     channel_matrix = torch.tensor(channel_matrix, dtype=torch.cdouble, device=device)  # Move to CUDA immediately
-#     return channel_matrix
 
 def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, log_file="training_log.csv"):
     # Define loss function and optimizer
