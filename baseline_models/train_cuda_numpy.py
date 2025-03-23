@@ -9,96 +9,8 @@ from tqdm import tqdm
 import argparse
 from torch.utils.data import Dataset, DataLoader
 import csv
-
-
-# Import your dataset and model
-# from dataloader import ChannelSequenceDataset
-# from effecientnet import LSTMChannelPredictor
-
-class CustomLSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size):
-        super(CustomLSTMModel, self).__init__()
-        
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
-    
-    def forward(self, x):
-        batch_size, channels, height, width, time_steps = x.shape  # (batch, 2, 18, 8, 3000)
-        
-        # Move input tensor to device
-        x = x
-        
-        # Reshape to feed into LSTM
-        x = x.view(batch_size * channels * height * width, time_steps, -1)  # (batch * 2 * 18 * 8, 3000, feature_dim)
-        
-        # Pass through LSTM
-        lstm_out, _ = self.lstm(x)
-        
-        # Get the last time step output
-        lstm_out = lstm_out[:, -1, :]  # (batch * 2 * 18 * 8, hidden_size)
-        
-        # Fully connected layer to match output shape
-        out = self.fc(lstm_out)  # (batch * 2 * 18 * 8, output_size)
-        
-        # Reshape to match desired output
-        out = out.view(batch_size, channels, height, width)  # (batch, 2, 18, 8)
-        
-        return out
-
-
-class ChannelSequenceDataset(Dataset):
-    def __init__(self, file_path, file_extension, device):
-        self.file_path = file_path + file_extension
-        self.file_extension = file_extension
-        self.device = device
-        
-        if self.file_extension == "npy":
-            self.data = np.load(self.file_path, mmap_mode='r')
-            self.num_users = self.data.shape[0]
-            self.time_length = self.data.shape[-1]
-        elif self.file_extension == "mat":
-            with h5py.File(self.file_path, "r") as f:
-                self.num_users = f["channel_matrix"].shape[0]
-                self.time_length = f["channel_matrix"].shape[-1]
-        else:
-            raise ValueError("Unsupported file format. Please use npy or mat.")
-    
-        self.overlapping_index = 16
-
-    # def __len__(self):
-    #     return self.num_users
-    
-    def __len__(self):
-        # Each sample has (3000 - self.overlapping_index) valid indices to extract overlapping sequences
-        return self.num_users * (self.time_length - (self.overlapping_index + 1))
-
-    def __getitem__(self, idx):
-        """
-        Returns:
-            input  -> (4, 18, 8, self.overlapping_index)  (self.overlapping_index time steps with real and imaginary parts concatenated)
-            output -> (4, 18, 8)    (next time step with real and imaginary parts concatenated)
-        """
-        sample_idx = idx // (self.time_length - (self.overlapping_index + 1))  # Which of the 256 samples
-        time_idx = idx % (self.time_length - (self.overlapping_index + 1))  # Time index within sample
-
-        # Extract real and imaginary parts as NumPy arrays
-        real_input = self.data.real[sample_idx, :, :, :, time_idx:time_idx+self.overlapping_index]
-        imag_input = self.data.imag[sample_idx, :, :, :, time_idx:time_idx+self.overlapping_index]
-        
-        real_output = self.data.real[sample_idx, :, :, :, time_idx+self.overlapping_index]
-        imag_output = self.data.imag[sample_idx, :, :, :, time_idx+self.overlapping_index]
-
-        # Convert to PyTorch tensors
-        real_input = torch.tensor(real_input, dtype=torch.float32, device=self.device)
-        imag_input = torch.tensor(imag_input, dtype=torch.float32, device=self.device)
-        real_output = torch.tensor(real_output, dtype=torch.float32, device=self.device)
-        imag_output = torch.tensor(imag_output, dtype=torch.float32, device=self.device)
-
-        # Concatenate along the first dimension
-        input_data = torch.cat([real_input, imag_input], dim=0)  # Shape: (4, 18, 8, self.overlapping_index)
-        output_data = torch.cat([real_output, imag_output], dim=0)  # Shape: (4, 18, self.overlapping_index)
-
-        return input_data, output_data
+from effecientnet import CustomLSTMModel
+from dataloader import ChannelSequenceDataset
 
 def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, log_file="training_log.csv"):
     # Define loss function and optimizer
@@ -121,18 +33,13 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
             progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
 
             for batch_idx, (X_batch, Y_batch) in enumerate(progress_bar):
-                # if batch_idx > 500:
-                #     break
-                X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)  # Move to GPU if available
+                X_batch, Y_batch = X_batch.to(device), Y_batch.to(device) 
                 optimizer.zero_grad()
                 
-                predictions = model(X_batch)  # Forward pass
-                loss = criterion(predictions, Y_batch)  # Compute loss
-                # print(X_batch.shape)
-                # print(Y_batch.shape)
-                # print(predictions.shape)
-                loss.backward()  # Backpropagation
-                optimizer.step()  # Update weights
+                predictions = model(X_batch) 
+                loss = criterion(predictions, Y_batch)  
+                loss.backward()  
+                optimizer.step()  
 
                 batch_loss = loss.item()  # Convert loss tensor to scalar
                 total_loss += batch_loss  # Accumulate loss

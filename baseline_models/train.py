@@ -26,9 +26,6 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3):
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
         
         for batch_idx, (X_batch, Y_batch) in enumerate(progress_bar):
-            # X_batch shape: (batch, time_pairs, 4, 18, 8)
-            # Y_batch shape: (batch, time_pairs, 4, 18, 8)
-            
             batch_size, time_pairs = X_batch.shape[0], X_batch.shape[1]
             batch_loss = 0.0
             
