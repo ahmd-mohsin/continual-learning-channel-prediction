@@ -15,6 +15,15 @@ import time
 # from dataloader import ChannelSequenceDataset
 # from effecientnet import LSTMChannelPredictor
 
+
+def load_model(model_path, input_size, hidden_size, num_layers, output_size, device):
+    model = CustomLSTMModel(input_size, hidden_size, num_layers, output_size).to(device)
+    checkpoint = torch.load(model_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
+    print(f"Loaded trained model from {model_path}")
+    return model
+
 class CustomLSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size):
         super(CustomLSTMModel, self).__init__()
@@ -268,7 +277,7 @@ def main():
     device = compute_device()
     # file_path = "../dataset/outputs/umi_compact_conf_8tx_2rx."
     
-    file_path = "../dataset/outputs/umi_compact_conf_2tx_2rx."
+    file_path = "../dataset/outputs/umi_standard_conf_16tx_2rx."
     full_dataset = ChannelSequenceDataset(file_path, args.ext, device)
     
     train_size = int(0.8 * len(full_dataset))
@@ -297,6 +306,8 @@ def main():
     print("Starting training...")
     model = train_model(model=model, dataloader=train_dataloader, device=device, num_epochs=10, learning_rate=1e-3)
     
+    # model = load_model("./best_channel_predictor.pth", input_size, hidden_size, num_layers, output_size, device)
+
     print("Evaluating model...")
     val_loss = evaluate_model(model, val_dataloader, device)
     

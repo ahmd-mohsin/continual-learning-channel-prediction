@@ -53,8 +53,8 @@ def evaluate_model(model, dataloader, criterion, device, log_file="testing_log.c
 def main():
     parser = argparse.ArgumentParser(description="Test an LSTM model on a new dataset.")
     parser.add_argument("--model_path", default="./best_channel_predictor.pth",type=str, help="Path to the trained model file")
-    parser.add_argument("--dataset_path",default="../dataset/outputs/umi_compact_conf_8tx_2rx.mat.", type=str, help="Path to the testing dataset")
-    parser.add_argument("--ext", type=str, default="npy", choices=["npy", "mat"], help="Dataset file extension (npy or mat)")
+    parser.add_argument("--dataset_path",default="../dataset/outputs/umi_compact_conf_2tx_2rx.", type=str, help="Path to the testing dataset")
+    parser.add_argument("--ext", type=str, default="mat", choices=["npy", "mat"], help="Dataset file extension (npy or mat)")
     args = parser.parse_args()
     
     device = compute_device()
@@ -63,11 +63,11 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=16, shuffle=False, drop_last=True)
     
     print("Initializing model...")
-    input_size = 1
-    hidden_size = 16
+    input_size = 1  # Each time step has one feature
+    hidden_size = 32
     num_layers = 16
-    output_size = 1
-    
+    output_size = 1  # Predicting one value per unit
+
     model = load_model(args.model_path, input_size, hidden_size, num_layers, output_size, device)
     
     criterion = nn.MSELoss()
