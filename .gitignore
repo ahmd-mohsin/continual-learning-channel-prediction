@@ -144,7 +144,7 @@ celerybeat.pid
 *.sage.py
 
 
-
+*.pth
 .venv
 .env
 env/

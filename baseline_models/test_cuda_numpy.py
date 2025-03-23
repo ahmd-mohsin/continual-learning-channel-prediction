@@ -53,7 +53,7 @@ def evaluate_model(model, dataloader, criterion, device, log_file="testing_log.c
 def main():
     parser = argparse.ArgumentParser(description="Test an LSTM model on a new dataset.")
     parser.add_argument("--model_path", default="./best_channel_predictor.pth",type=str, help="Path to the trained model file")
-    parser.add_argument("--dataset_path",default="../dataset/outputs/umi_dense_conf_8tx_2rx.mat.", type=str, help="Path to the testing dataset")
+    parser.add_argument("--dataset_path",default="../dataset/outputs/umi_compact_conf_8tx_2rx.mat.", type=str, help="Path to the testing dataset")
     parser.add_argument("--ext", type=str, default="npy", choices=["npy", "mat"], help="Dataset file extension (npy or mat)")
     args = parser.parse_args()
     
