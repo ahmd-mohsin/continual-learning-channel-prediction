@@ -18,8 +18,6 @@ def evaluate_model(model, dataloader, criterion, device, log_file="testing_log.c
     with torch.no_grad():  # Disable gradients for evaluation
         progress_bar = tqdm(dataloader, desc="Testing Model")
         for index, (X_batch, Y_batch) in enumerate(progress_bar):
-            if index > 5:
-                break
             X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
             predictions = model(X_batch)
             loss = criterion(predictions, Y_batch)

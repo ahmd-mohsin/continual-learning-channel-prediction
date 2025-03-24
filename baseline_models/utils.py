@@ -37,8 +37,6 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
 
             progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
             for batch_idx, (X_batch, Y_batch) in enumerate(progress_bar):
-                if batch_idx > 5:
-                    break
                 X_batch, Y_batch = X_batch.to(device), Y_batch.to(device) 
                 optimizer.zero_grad()
                 
@@ -80,8 +78,6 @@ def evaluate_model(model, dataloader, device, log_file="evaluation_log.csv"):
 
     with torch.no_grad():
         for batch_idx, (X_batch, Y_batch) in enumerate(tqdm(dataloader)):
-            if batch_idx > 5:
-                    break
             X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
             predictions = model(X_batch)
             loss = criterion(predictions, Y_batch)
