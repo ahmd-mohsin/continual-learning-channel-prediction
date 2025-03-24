@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import h5py
 import numpy as np
 
@@ -17,22 +17,21 @@ class ChannelSequenceDataset(Dataset):
             with h5py.File(self.file_path, "r") as f:
                 self.num_users = f["channel_matrix"].shape[0]
                 self.time_length = f["channel_matrix"].shape[-1]
+                channel_group = f["channel_matrix"]
+                real = np.array(channel_group["real"])
+                imag = np.array(channel_group["imag"])
+                self.data = real + 1j * imag
         else:
             raise ValueError("Unsupported file format. Please use npy or mat.")
     
         self.overlapping_index = 16
-    
+
     def __len__(self):
         return self.num_users * (self.time_length - (self.overlapping_index + 1))
 
     def __getitem__(self, idx):
-        """
-        Returns:
-            input  -> (4, 18, 8, self.overlapping_index)  (self.overlapping_index time steps with real and imaginary parts concatenated)
-            output -> (4, 18, 8)(next time step with real and imaginary parts concatenated)
-        """
-        sample_idx = idx // (self.time_length - (self.overlapping_index + 1))  
-        time_idx = idx % (self.time_length - (self.overlapping_index + 1))  
+        sample_idx = idx // (self.time_length - (self.overlapping_index + 1))
+        time_idx = idx % (self.time_length - (self.overlapping_index + 1))
 
         real_input = self.data.real[sample_idx, :, :, :, time_idx:time_idx+self.overlapping_index]
         imag_input = self.data.imag[sample_idx, :, :, :, time_idx:time_idx+self.overlapping_index]
@@ -45,8 +44,7 @@ class ChannelSequenceDataset(Dataset):
         real_output = torch.tensor(real_output, dtype=torch.float32, device=self.device)
         imag_output = torch.tensor(imag_output, dtype=torch.float32, device=self.device)
 
-       
-        input_data = torch.cat([real_input, imag_input], dim=0)  
-        output_data = torch.cat([real_output, imag_output], dim=0)  
+        input_data = torch.cat([real_input, imag_input], dim=0)
+        output_data = torch.cat([real_output, imag_output], dim=0)
 
         return input_data, output_data
