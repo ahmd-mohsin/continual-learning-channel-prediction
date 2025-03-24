@@ -69,7 +69,7 @@ cover/
 # Translations
 *.mo
 *.pot
-*.csv
+
 
 # Django stuff:
 *.log

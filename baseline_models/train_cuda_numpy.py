@@ -277,7 +277,7 @@ def main():
     device = compute_device()
     # file_path = "../dataset/outputs/umi_compact_conf_8tx_2rx."
     
-    file_path = "../dataset/outputs/umi_standard_conf_16tx_2rx."
+    file_path = "../dataset/outputs/umi_compact_conf_2tx_2rx."
     full_dataset = ChannelSequenceDataset(file_path, args.ext, device)
     
     train_size = int(0.8 * len(full_dataset))
