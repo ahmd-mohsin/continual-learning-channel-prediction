@@ -6,7 +6,7 @@ from tqdm import tqdm
 import argparse
 from dataloader import ChannelSequenceDataset
 from model import CustomLSTMModel
-from loss import ScaledMSELoss  # Import your custom loss if needed (adjust based on your loss function)
+from loss import CustomLoss  # Import your custom loss if needed (adjust based on your loss function)
 from utils import compute_device
 from model import load_model
 import os
@@ -56,8 +56,7 @@ def main():
     model = load_model(args.model_path, device)
     
     # Select the loss function (you can use your custom loss function here)
-    # criterion = ScaledMSELoss()  # For example, using Scaled MSE Loss
-    criterion = nn.L1Loss()  # For example, using Scaled MSE Loss
+    criterion = CustomLoss()  # For example, using Scaled MSE Loss
     output_dir = os.path.join(os.path.basename(args.dataset_path))
 
     # Define the log file and model save paths

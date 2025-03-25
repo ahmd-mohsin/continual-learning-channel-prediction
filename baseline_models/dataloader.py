@@ -26,6 +26,9 @@ class ChannelSequenceDataset(Dataset):
     
         self.overlapping_index = 16
 
+        # Find the max values for the entire dataset
+        self.max_value = np.max(np.abs(self.data))  # The absolute max value across both real and imaginary parts
+
     def __len__(self):
         return self.num_users * (self.time_length - (self.overlapping_index + 1))
 
@@ -39,6 +42,17 @@ class ChannelSequenceDataset(Dataset):
         real_output = self.data.real[sample_idx, :, :, :, time_idx+self.overlapping_index]
         imag_output = self.data.imag[sample_idx, :, :, :, time_idx+self.overlapping_index]
 
+        # Normalize the input and output values using the max values
+        # real_input = real_input 
+        # imag_input = imag_input 
+        # real_output = real_output 
+        # imag_output = imag_output 
+        # -----------------------------
+        real_input = real_input / self.max_value
+        imag_input = imag_input / self.max_value
+        real_output = real_output / self.max_value
+        imag_output = imag_output / self.max_value
+
         real_input = torch.tensor(real_input, dtype=torch.float32, device=self.device)
         imag_input = torch.tensor(imag_input, dtype=torch.float32, device=self.device)
         real_output = torch.tensor(real_output, dtype=torch.float32, device=self.device)
@@ -48,3 +62,8 @@ class ChannelSequenceDataset(Dataset):
         output_data = torch.cat([real_output, imag_output], dim=0)
 
         return input_data, output_data
+
+    def get_max_values(self):
+        return {
+            'overall_max': self.max_value,
+        }

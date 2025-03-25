@@ -2,14 +2,13 @@ import argparse
 import os
 from model import CustomLSTMModel, load_model
 from dataloader import ChannelSequenceDataset
-from loss import ScaledMSELoss
 from utils import train_model, evaluate_model, compute_device
 import torch
 
 def main():
     parser = argparse.ArgumentParser(description="Train an LSTM model for channel prediction.")
     parser.add_argument("--ext", type=str, required=True, choices=["npy", "mat"], help="Dataset file extension (npy or mat)")
-    parser.add_argument("--file_path", type=str, default="../dataset/outputs/umi_standard_conf_16tx_2rx.", help="Dataset file path without extension")
+    parser.add_argument("--file_path", type=str, default="../dataset/outputs/umi_compact_conf_2tx_2rx.", help="Dataset file path without extension")
     args = parser.parse_args()
 
     torch.manual_seed(42)
@@ -47,7 +46,7 @@ def main():
     model_save_path = os.path.join(output_dir, "best_channel_predictor.pth")
 
     print(f"Starting training...")
-    model = train_model(model=model, dataloader=train_dataloader, device=device, num_epochs=10, learning_rate=1e-3, log_file=training_log_file, model_save_path=model_save_path)
+    model = train_model(model=model, dataloader=train_dataloader, device=device, num_epochs=30, learning_rate=1e-3, log_file=training_log_file, model_save_path=model_save_path)
     
     print("Evaluating model...")
     val_loss = evaluate_model(model, val_dataloader, device, log_file=evaluation_log_file)

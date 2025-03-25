@@ -19,8 +19,7 @@ def compute_device():
 
 
 def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, log_file="training_log.csv", model_save_path="best_channel_predictor.pth"):
-    # criterion = ScaledMSELoss()
-    criterion = nn.L1Loss()
+    criterion = CustomLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
     
@@ -43,6 +42,15 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
                 
                 predictions = model(X_batch) 
                 loss = criterion(predictions, Y_batch)  
+                # Optional: Debug prints
+                # print("X_Batch", X_batch.shape)
+                # print("Y_batch", Y_batch.shape)
+                # print("predictions", predictions.shape)
+                # Print min and max values for each
+                # print("X_batch - Min: {}, Max: {}".format(X_batch.min().item(), X_batch.max().item()))
+                # print("Y_batch - Min: {}, Max: {}".format(Y_batch.min().item(), Y_batch.max().item()))
+                # print("Predictions - Min: {}, Max: {}".format(predictions.min().item(), predictions.max().item()))
+
                 loss.backward()  
                 optimizer.step()  
 
@@ -72,8 +80,7 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
     return model
 
 def evaluate_model(model, dataloader, device, log_file="evaluation_log.csv"):
-    # criterion = ScaledMSELoss()
-    criterion = nn.L1Loss()
+    criterion = CustomLoss()
     model.eval()
     total_loss = 0.0
     num_batches = len(dataloader)
