@@ -19,7 +19,8 @@ def compute_device():
 
 
 def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, log_file="training_log.csv", model_save_path="best_channel_predictor.pth"):
-    criterion = ScaledMSELoss()
+    # criterion = ScaledMSELoss()
+    criterion = nn.L1Loss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
     
@@ -71,7 +72,8 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
     return model
 
 def evaluate_model(model, dataloader, device, log_file="evaluation_log.csv"):
-    criterion = ScaledMSELoss()
+    # criterion = ScaledMSELoss()
+    criterion = nn.L1Loss()
     model.eval()
     total_loss = 0.0
     num_batches = len(dataloader)

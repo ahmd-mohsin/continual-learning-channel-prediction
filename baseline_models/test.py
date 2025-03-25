@@ -52,15 +52,12 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=16, shuffle=False, drop_last=True)
     
     print("Initializing model...")
-    input_size = 1  # Each time step has one feature
-    hidden_size = 32
-    num_layers = 16
-    output_size = 1  # Predicting one value per unit
 
-    model = load_model(args.model_path, input_size, hidden_size, num_layers, output_size, device)
+    model = load_model(args.model_path, device)
     
     # Select the loss function (you can use your custom loss function here)
-    criterion = ScaledMSELoss()  # For example, using Scaled MSE Loss
+    # criterion = ScaledMSELoss()  # For example, using Scaled MSE Loss
+    criterion = nn.L1Loss()  # For example, using Scaled MSE Loss
     output_dir = os.path.join(os.path.basename(args.dataset_path))
 
     # Define the log file and model save paths

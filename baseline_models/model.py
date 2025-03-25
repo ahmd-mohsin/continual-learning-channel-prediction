@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class CustomLSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size):
+    def __init__(self, input_size = 1, hidden_size = 32, num_layers = 3, output_size = 1):
         super(CustomLSTMModel, self).__init__()
         
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
@@ -28,8 +28,8 @@ class CustomLSTMModel(nn.Module):
         
         return out
 
-def load_model(model_path, input_size, hidden_size, num_layers, output_size, device):
-    model = CustomLSTMModel(input_size, hidden_size, num_layers, output_size).to(device)
+def load_model(model_path, device):
+    model = CustomLSTMModel().to(device)
     checkpoint = torch.load(model_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()

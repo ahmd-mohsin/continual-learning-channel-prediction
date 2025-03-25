@@ -29,14 +29,9 @@ def main():
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     
     print(f"Created dataloaders with batch size {batch_size}")
-    
-    input_size = 1  # Each time step has one feature
-    hidden_size = 32
-    num_layers = 16
-    output_size = 1  # Predicting one value per unit
 
     # Initialize model and move to device
-    model = CustomLSTMModel(input_size, hidden_size, num_layers, output_size).to(device)
+    model = CustomLSTMModel().to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params}")
