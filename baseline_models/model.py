@@ -31,6 +31,7 @@
 import torch
 import torch.nn as nn
 import math
+import torch.nn.functional as F
 
 ###############################################################################
 # Helper function for Transformer masks (like in the notebook)
@@ -313,6 +314,7 @@ class TransformerModel(nn.Module):
         out = self.fc_out(out).squeeze(1)  # Shape: (batch, input_size)
         # Reshape to (batch, out_channels, H, W)
         out = out.view(batch_size, self.out_channels, self.H, self.W)
+        # out = F.relu(out)
         return out
 
 

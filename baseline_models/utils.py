@@ -19,7 +19,8 @@ def compute_device():
 
 
 def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, log_file="training_log.csv", model_save_path="best_channel_predictor.pth"):
-    criterion = CustomLoss()
+    # criterion = CustomLoss()
+    criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
     
@@ -42,6 +43,10 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
                 
                 predictions = model(X_batch) 
                 loss = criterion(predictions, Y_batch)  
+
+                # print("After normalized X_batch", X_batch[0], X_batch.shape)
+                # print("After normalized Y_batch", Y_batch[0], Y_batch.shape)
+                # print("Predictions", predictions[0], predictions.shape)
                 # Optional: Debug prints
                 # print("X_Batch", X_batch.shape)
                 # print("Y_batch", Y_batch.shape)
@@ -50,13 +55,15 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
                 # print("X_batch - Min: {}, Max: {}".format(X_batch.min().item(), X_batch.max().item()))
                 # print("Y_batch - Min: {}, Max: {}".format(Y_batch.min().item(), Y_batch.max().item()))
                 # print("Predictions - Min: {}, Max: {}".format(predictions.min().item(), predictions.max().item()))
-
                 loss.backward()  
                 optimizer.step()  
 
+                # break
                 batch_loss = loss.item()
                 total_loss += batch_loss
-                progress_bar.set_postfix(batch_loss=batch_loss)
+                avg_loss_so_far = total_loss / (batch_idx + 1)
+                progress_bar.set_postfix(avg_loss=avg_loss_so_far)
+                # progress_bar.set_postfix(batch_loss=batch_loss)
 
             avg_epoch_loss = total_loss / num_batches
             writer.writerow([epoch + 1, avg_epoch_loss])
@@ -72,6 +79,7 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3, lo
                     'loss': best_loss,
                 }, model_save_path)
 
+            # break
         end_time = time.time()
         total_time = end_time - start_time
         formatted_time = time.strftime('%H:%M:%S', time.gmtime(total_time))
