@@ -165,7 +165,7 @@ class GRUModel(nn.Module):
         # After flattening, each time step is a vector of size (2*H*W).
         # So we reshape into (batch, seq_len, 2*H*W).
         x = x.permute(0, 4, 1, 2, 3)  # => (batch, seq_len, 2, H, W)
-        x = x.reshape(batch_size, seq_len, 2 * H * W)
+        x = x.reshape(batch_size, seq_len, two * H * W)
 
         # Pass through GRU
         out, _ = self.gru(x)  # out shape: (batch, seq_len, hidden_dim)
@@ -174,7 +174,7 @@ class GRUModel(nn.Module):
 
         # Map to (2*H*W)
         out = self.fc(out)  # => (batch, 2*H*W)
-        out = out.view(batch_size, 2, H, W)  # => (batch, 2, H, W)
+        out = out.view(batch_size, two, H, W)  # => (batch, 2, H, W)
         return out
 
 

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# # Run transformer model on umi_compact
-# python main.py --ext mat --model_type LSTM --file_path "../dataset/outputs/umi_compact_conf_2tx_2rx."
+# Run transformer model on umi_compact
+python main.py --ext mat --model_type LSTM --file_path "../dataset/outputs/umi_compact_conf_2tx_2rx."
 
-# # Run transformer model on umi_dense
-# python main.py --ext mat --model_type LSTM --file_path "../dataset/outputs/umi_dense_conf_8tx_2rx."
+# Run transformer model on umi_dense
+python main.py --ext mat --model_type LSTM --file_path "../dataset/outputs/umi_dense_conf_8tx_2rx."
 
-# # Run transformer model on umi_standard
-# python main.py --ext mat --model_type LSTM --file_path "../dataset/outputs/umi_standard_conf_16tx_2rx."
+# Run transformer model on umi_standard
+python main.py --ext mat --model_type LSTM --file_path "../dataset/outputs/umi_standard_conf_16tx_2rx."
 
 
 
