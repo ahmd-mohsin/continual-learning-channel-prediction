@@ -203,13 +203,13 @@ class LSTMModel(nn.Module):
 
         # Flatten the matrix for each time step
         x = x.permute(0, 4, 1, 2, 3)  # => (batch, seq_len, 2, H, W)
-        x = x.reshape(batch_size, seq_len, 2 * H * W)
+        x = x.reshape(batch_size, seq_len, two * H * W)
 
         # Pass through LSTM
         out, _ = self.lstm(x)  # (batch, seq_len, hidden_dim)
         out = out[:, -1, :]    # (batch, hidden_dim)
         out = self.fc(out)     # (batch, 2*H*W)
-        out = out.view(batch_size, 2, H, W)
+        out = out.view(batch_size, two, H, W)
         return out
 
 

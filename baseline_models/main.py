@@ -152,8 +152,8 @@ def main():
             hidden_dim=32,
             output_dim=1,
             n_layers=3,
-            H=32,
-            W=64
+            H=16,
+            W=36
         ).to(device)
 
     elif args.model_type == "TRANS":
