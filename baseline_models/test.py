@@ -5,10 +5,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import argparse
 from dataloader import ChannelSequenceDataset
-from model import CustomLSTMModel
+# from model import CustomLSTMModel
 from loss import CustomLoss  # Import your custom loss if needed (adjust based on your loss function)
 from utils import compute_device
-from model import load_model
+# from model import load_model
 import os
 def evaluate_model(model, dataloader, criterion, device, log_file="testing_log.csv"):
     model.eval()  # Ensure the model is in evaluation mode
@@ -36,8 +36,8 @@ def evaluate_model(model, dataloader, criterion, device, log_file="testing_log.c
 
 def main():
     parser = argparse.ArgumentParser(description="Test an LSTM model on a new dataset.")
-    parser.add_argument("--model_path", default="./umi_standard_conf_16tx_2rx./best_channel_predictor.pth",type=str, help="Path to the trained model file")
-    parser.add_argument("--dataset_path",default="../dataset/outputs/umi_dense_conf_8tx_2rx.", type=str, help="Path to the testing dataset")
+    parser.add_argument("--model_path", default="./umi_dense_conf_8tx_2rx./best_channel_predictor.pth",type=str, help="Path to the trained model file")
+    parser.add_argument("--dataset_path",default="../dataset/outputs/umi_standard_conf_16tx_2rx.", type=str, help="Path to the testing dataset")
     parser.add_argument("--ext", type=str, default="mat", choices=["npy", "mat"], help="Dataset file extension (npy or mat)")
     args = parser.parse_args()
     
@@ -52,11 +52,10 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=16, shuffle=False, drop_last=True)
     
     print("Initializing model...")
-
-    model = load_model(args.model_path, device)
     
     # Select the loss function (you can use your custom loss function here)
-    criterion = CustomLoss()  # For example, using Scaled MSE Loss
+    # criterion = CustomLoss()  # For example, using Scaled MSE Loss
+    criterion = nn.MSELoss()  # For example, using Scaled MSE Loss
     output_dir = os.path.join(os.path.basename(args.dataset_path))
 
     # Define the log file and model save paths

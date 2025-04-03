@@ -78,16 +78,24 @@ from utils import train_model, evaluate_model, compute_device
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train a channel-prediction model.")
+    parser = argparse.ArgumentParser(description="Train or evaluate a channel-prediction model.")
     parser.add_argument("--ext", type=str, required=True, choices=["npy", "mat"],
                         help="Dataset file extension (npy or mat)")
     parser.add_argument("--file_path", type=str, default="../dataset/outputs/umi_compact_conf_2tx_2rx.",
-                        help="Dataset file path without extension")
-    # New argument to choose model architecture:
+                        help="Training dataset file path without extension")
     parser.add_argument("--model_type", type=str, default="LSTM",
                         choices=["MLP", "CNN", "GRU", "LSTM", "TRANS"],
-                        help="Which model architecture to train.")
+                        help="Which model architecture to use")
+    parser.add_argument("--test_only", action="store_true",
+                        help="If set, skip training and only run evaluation on test_file_path")
+    parser.add_argument("--test_file_path", type=str, default="../dataset/outputs/umi_compact_conf_2tx_2rx.", #  umi_standard_conf_16tx_2rx
+                        help="Test file path (used only if --test_only is set)")
     args = parser.parse_args()
+
+    # umi_dense_conf_8tx_2rx torch.Size([_, 4, 18, 8, 16])
+    # umi_standard_conf_16tx_2rx torch.Size([16, 4, 18, 16, 16])
+    # umi_compact_conf_2tx_2rx torch.Size([16, 4, 18, 2, 16])
+
 
     # Set random seed
     torch.manual_seed(42)
@@ -144,8 +152,8 @@ def main():
             hidden_dim=32,
             output_dim=1,
             n_layers=3,
-            H=18,
-            W=8
+            H=32,
+            W=64
         ).to(device)
 
     elif args.model_type == "TRANS":
@@ -156,21 +164,55 @@ def main():
                 n_decoder_layers=1,
                 out_channels=4,  # Because dataloader outputs (4,18,2)
                 H=18,
-                W=2,
+                W=16,
                 seq_len=16
             ).to(device)
    
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Using {args.model_type} model. Total parameters: {total_params}")
+    # Evaluation-only mode
+    
+    
+    if args.test_only:
+        if not args.test_file_path:
+            raise ValueError("Please provide --test_file_path when using --test_only flag.")
 
-    # Create output folder
+        print("Running in evaluation-only mode...")
+        test_dataset = ChannelSequenceDataset(args.test_file_path, args.ext, device)
+            
+        train_size = int(0.8 * len(test_dataset))
+        val_size = len(test_dataset) - train_size
+        _, test_dataset = torch.utils.data.random_split(test_dataset, [train_size, val_size])
+
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False, drop_last=True)
+
+        # Load model checkpoint
+        output_dir = os.path.basename(args.file_path)
+        model_save_path = os.path.join(output_dir,args.model_type, "best_channel_predictor.pth")
+        model.load_state_dict(torch.load(model_save_path)["model_state_dict"])
+
+        evaluation_log_file = os.path.join(output_dir,args.model_type, f"{os.path.basename(args.test_file_path)}_evaluation_log.csv")
+        print("Evaluating model on test set...")
+        test_loss = evaluate_model(model, test_dataloader, device, log_file=evaluation_log_file)
+        print(f"Test loss: {test_loss:.6f}")
+        return
+
+    # Training + validation mode
+    file_path = args.file_path
+    full_dataset = ChannelSequenceDataset(file_path, args.ext, device)
+    train_size = int(0.8 * len(full_dataset))
+    val_size = len(full_dataset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
+
+    batch_size = 16
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+
     output_dir = os.path.basename(file_path)
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Define log file & model save paths
-    training_log_file = os.path.join(output_dir, "training_log.csv")
-    evaluation_log_file = os.path.join(output_dir, "evaluation_log.csv")
-    model_save_path = os.path.join(output_dir, "best_channel_predictor.pth")
+    os.makedirs(os.path.join(output_dir, args.model_type), exist_ok=True)
+    training_log_file = os.path.join(output_dir, args.model_type, "training_log.csv")
+    evaluation_log_file = os.path.join(output_dir, args.model_type, "evaluation_log.csv")
+    model_save_path = os.path.join(output_dir,args.model_type,  "best_channel_predictor.pth")
     
     print(f"Training log file: {training_log_file}")
     print(f"Starting training...")
@@ -186,6 +228,7 @@ def main():
         model_save_path=model_save_path
     )
     
+    # model.load_state_dict(torch.load(model_save_path)["model_state_dict"])
     # Evaluate
     print("Evaluating model...")
     val_loss = evaluate_model(model, val_dataloader, device, log_file=evaluation_log_file)

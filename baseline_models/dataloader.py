@@ -2,6 +2,8 @@ import torch
 from torch.utils.data import Dataset
 import h5py
 import numpy as np
+import torch.nn.functional as F
+
 
 class ChannelSequenceDataset(Dataset):
     def __init__(self, file_path, file_extension, device):
@@ -94,7 +96,27 @@ class ChannelSequenceDataset(Dataset):
 
         input_data = torch.cat([real_input, imag_input], dim=0)
         output_data = torch.cat([real_output, imag_output], dim=0)
+        # Get the second last dimension
+        # print("input_data shape", input_data.shape)
+        
+        # for input
+        current_size = input_data.shape[2]
+        if current_size < 16:
+            pad_amount = 16 - current_size
+            # Padding format: (last_dim_left, last_dim_right, ..., dim3_left, dim3_right)
+            # Pad dim=3 (the 4th dimension), on the right
+            pad = [0, 0, 0, pad_amount]  # pad dim=3 only
+            pad = [0, 0] * (input_data.dim() - 4) + pad
+            input_data = F.pad(input_data, pad)
+        
+        
+        # for output
+        if output_data.shape[-1] < 16:
+            pad_amount = 16 - output_data.shape[-1]
+            # Padding format for 3D: (last_dim_left, last_dim_right)
+            output_data = F.pad(output_data, (0, pad_amount))  # pad only on the right side of last dimension
 
+                
         return input_data, output_data
 
     def get_max_values(self):

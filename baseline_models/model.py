@@ -19,13 +19,7 @@
 #         out = out.view(batch_size, channels, height, width)  # (batch, 2, 18, 8) 
 #         return out
 
-# def load_model(model_path, device):
-#     model = CustomLSTMModel().to(device)
-#     checkpoint = torch.load(model_path, map_location=device)
-#     model.load_state_dict(checkpoint['model_state_dict'])
-#     model.eval()
-#     print(f"Loaded trained model from {model_path}")
-#     return model
+
 
 
 import torch
