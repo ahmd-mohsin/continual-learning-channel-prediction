@@ -111,10 +111,9 @@ def main():
     # Instantiate the desired model. Adjust dimensions as needed:
     # (Below we assume your channel has size H=18, W=8, and input seq_len=16, etc.)
     # ----------------------------------------------------------------------------
-    
     if args.model_type == "MLP":
         model = MLPModel(
-            input_dim=16 * 2 * 18 * 8,  # example if your seq_len=16, and 2*18*8 for real+imag
+            input_dim=16 * 2 * 18 * 8,  # example if your seq_len=16, 2 for real+imag, H=18, W=8
             hidden_dim=128,
             H=18,
             W=8
@@ -161,7 +160,6 @@ def main():
                 seq_len=16
             ).to(device)
    
-
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Using {args.model_type} model. Total parameters: {total_params}")
 
