@@ -4,6 +4,16 @@ import torch
 import csv
 from dataloader import ChannelSequenceDataset
 from utils import compute_device
+from tqdm import tqdm
+# Import the new model classes from model.py:
+from model import (
+    MLPModel,
+    CNNModel,
+    GRUModel,
+    LSTMModel,
+    TransformerModel
+)
+
 
 def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
     """
@@ -14,15 +24,21 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
       NMSE = sum((prediction - Y_true)^2) / sum(Y_true^2)
     and then averaged over the dataset.
     """
-    model.eval()
+    # model.eval()
     nmse_results = {}
+    criterion = torch.nn.MSELoss()  
     with torch.no_grad():
         for snr_db in snr_db_list:
             total_nmse = 0.0
-            total_samples = 0
-            for X_batch, Y_batch in dataloader:
+            total_samples = len(dataloader)
+            
+            for X_batch, Y_batch in tqdm(dataloader, desc="Evaluating NMSE for SNR_DB: " + str(snr_db)):
+                
                 X_batch = X_batch.to(device)
                 Y_batch = Y_batch.to(device)
+                if torch.sum(Y_batch**2) == 0:
+                    # print(f"Skipping batch because Y_batch sum is equal to zero.")
+                    continue
                 # Compute the power of the input signal
                 signal_power = torch.mean(X_batch**2)
                 # Determine noise power based on SNR in dB
@@ -34,10 +50,11 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
                 # Get channel prediction using the noisy input
                 prediction = model(X_noisy)
                 # Compute NMSE per batch: (error norm squared) / (true norm squared)
-                batch_nmse = torch.sum((prediction - Y_batch)**2) / torch.sum(Y_batch**2)
+                batch_nmse = torch.sum((prediction - Y_batch)**2) / (torch.sum(Y_batch**2))
+                # batch_nmse = criterion(prediction, Y_batch)
                 # Multiply by batch size and sum for weighted average
-                total_nmse += batch_nmse.item() * X_batch.size(0)
-                total_samples += X_batch.size(0)
+                total_nmse += batch_nmse.item()
+                # print(f"Batch NMSE: {batch_nmse.item():.6f}")
             nmse_results[snr_db] = total_nmse / total_samples
             print(f"SNR: {snr_db} dB, NMSE: {nmse_results[snr_db]:.6f}")
     return nmse_results
@@ -51,52 +68,107 @@ if __name__ == "__main__":
     parser.add_argument("--model_type", type=str, required=True,
                         choices=["MLP", "CNN", "GRU", "LSTM", "TRANS"],
                         help="Model architecture type")
-    parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Path to the saved model checkpoint")
-    parser.add_argument("--snr_db", type=float, nargs="+", default=[0, 5, 10, 15, 20, 25, 30],
+    # parser.add_argument("--checkpoint", type=str, required=True,
+    #                     help="Path to the saved model checkpoint")
+    parser.add_argument("--snr_db", type=float, nargs="+", default=[0, 5, 10,12,14,16,18, 20,22,24,26,28, 30],
                         help="List of SNR values (in dB) to evaluate")
+    
+    parser.add_argument("--test_file_path", type=str, default="../dataset/outputs/umi_compact_conf_2tx_2rx.", #  umi_standard_conf_16tx_2rx
+                        help="Test file path (used only if --test_only is set)")
+    
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for evaluation")
     args = parser.parse_args()
 
     device = compute_device()
 
     # Load the test dataset
-    test_dataset = ChannelSequenceDataset(args.file_path, args.ext, device)
+    # if args.file_path == args.test_file_path:
+    #     print("Loading test same dataset...")
+    #     full_dataset = ChannelSequenceDataset(args.test_file_path, args.ext, device)
+    #     train_size = int(0.8 * len(full_dataset))
+    #     val_size = len(full_dataset) - train_size
+    #     train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
+    # else:
+    #     print("Loading test different dataset...")
+    #     test_dataset = ChannelSequenceDataset(args.test_file_path, args.ext, device)
+    
+    test_dataset = ChannelSequenceDataset(args.test_file_path, args.ext, device)
+    
+    
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size,
                                                   shuffle=False, drop_last=True)
 
-    # Instantiate the desired model architecture
     if args.model_type == "MLP":
-        from model import MLPModel
-        model = MLPModel(input_dim=16 * 2 * 18 * 8, hidden_dim=128, H=18, W=8).to(device)
+        model = MLPModel(
+            input_dim=16 * 2 * 18 * 8,  # example if your seq_len=16, 2 for real+imag, H=18, W=8
+            hidden_dim=128,
+            H=18,
+            W=8
+        ).to(device)
+
     elif args.model_type == "CNN":
-        from model import CNNModel
-        model = CNNModel(in_channels=2, H=18, W=8, seq_len=16, hidden_channels=32).to(device)
+        model = CNNModel(
+            in_channels=2,    # "2" used per time-slice, though we group seq_len inside
+            H=18,
+            W=8,
+            seq_len=16,       # adjust if your overlapping_index=16
+            hidden_channels=32
+        ).to(device)
+
     elif args.model_type == "GRU":
-        from model import GRUModel
-        model = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=36).to(device)
+        model = GRUModel(
+            input_dim=1,      # not strictly used—since we flatten to 2*H*W
+            hidden_dim=32,
+            output_dim=1,
+            n_layers=3,
+            H=16,
+            W=36
+        ).to(device)
+
     elif args.model_type == "LSTM":
-        from model import LSTMModel
-        model = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=36).to(device)
+        model = LSTMModel(
+            input_dim=1,
+            hidden_dim=32,
+            output_dim=1,
+            n_layers=3,
+            H=16,
+            W=36
+        ).to(device)
+
     elif args.model_type == "TRANS":
-        from model import TransformerModel
-        # Adjust parameters as necessary for your data shape.
-        model = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
-                                 n_decoder_layers=1, out_channels=4, H=18, W=16, seq_len=16).to(device)
+        model = TransformerModel(
+                dim_val=128,
+                n_heads=4,
+                n_encoder_layers=1,
+                n_decoder_layers=1,
+                out_channels=4,  # Because dataloader outputs (4,18,2)
+                H=18,
+                W=16,
+                seq_len=16
+            ).to(device)   
+        
+
+    # # Load the trained model checkpoint
+    # checkpoint = torch.load(args.checkpoint, map_location=device)
+    # model.load_state_dict(checkpoint["model_state_dict"])
+    # print(f"Loaded model checkpoint from {args.checkpoint}")
+
     
-    # Load the trained model checkpoint
-    checkpoint = torch.load(args.checkpoint, map_location=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
-    print(f"Loaded model checkpoint from {args.checkpoint}")
+
+    # Load model checkpoint
+    output_dir = os.path.basename(args.file_path)
+    model_save_path = os.path.join(output_dir,args.model_type, "best_channel_predictor.pth")
+    model.load_state_dict(torch.load(model_save_path)["model_state_dict"])
 
     # Evaluate NMSE over the provided SNR values
     nmse_results = evaluate_nmse_vs_snr(model, test_dataloader, device, args.snr_db)
     
     # Save the NMSE vs. SNR results to a CSV file
-    output_csv = "nmse_vs_snr.csv"
-    with open(output_csv, mode='w', newline='') as file:
+    evaluation_log_file = os.path.join(output_dir,args.model_type, f"{os.path.basename(args.test_file_path)}_nmse_vs_snr.csv")
+
+    with open(evaluation_log_file, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["SNR (dB)", "NMSE"])
         for snr, nmse in sorted(nmse_results.items()):
             writer.writerow([snr, nmse])
-    print(f"NMSE vs. SNR results saved to {output_csv}")
+    print(f"NMSE vs. SNR results saved to {evaluation_log_file}")
