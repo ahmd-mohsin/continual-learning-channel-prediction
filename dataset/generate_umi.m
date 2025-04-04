@@ -141,7 +141,7 @@
 
 function generate_umi(seed)
     % Transmit power fixed at 1 Watt (do not change)
-    tx_power = 1;  % 1 Watt = 30 dBm
+    tx_power = 100000000;  % 1 Watt = 30 dBm
     
     if nargin > 0
         rng(seed, 'twister');

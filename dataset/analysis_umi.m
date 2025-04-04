@@ -74,10 +74,9 @@ for i = 1:num_configs
         'FaceColor', cmap(i,:));
 end
 
-xlabel('Channel Magnitude (linear)');
-ylabel('Probability');
-title('UMi: Distribution of Channel Magnitudes (linear scale)');
-legend('Location','best');
+xlabel('\textbf{Channel Magnitude (linear)}', 'Interpreter', 'latex', 'FontSize', 14);
+ylabel('\textbf{Probability}', 'Interpreter', 'latex', 'FontSize', 14);
+legend('Location','best', 'Interpreter', 'latex', 'FontSize', 14, 'FontWeight', 'bold');
 grid on;
 
 saveas(gcf, fullfile('figures_umi', 'umi_channel_magnitude_hist.png'));
@@ -98,12 +97,11 @@ for i = 1:num_configs
         'FaceColor', cmap(i,:));
 end
 
-xlabel('Channel Gain (dB)');
-ylabel('Probability');
-title('UMi: Distribution of Channel Gains (dB scale)');
-legend('Location','best');
+xlabel('\textbf{Channel Gain (dB)}', 'Interpreter', 'latex', 'FontSize', 14);
+ylabel('\textbf{Probability}', 'Interpreter', 'latex', 'FontSize', 14);
+legend('Location','best', 'Interpreter', 'latex', 'FontSize', 14, 'FontWeight', 'bold');
 grid on;
-
+box on;
 saveas(gcf, fullfile('figures_umi', 'umi_channel_gain_hist.png'));
 
 fprintf('\nAnalysis complete. Figures saved in "figures_umi" folder.\n');
