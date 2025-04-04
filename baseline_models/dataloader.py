@@ -36,7 +36,23 @@ class ChannelSequenceDataset(Dataset):
         # print("###############################")
         # print("max_value", self.max_value)
         # print("min_value", self.min_value)
-        # print("###############################")
+        # Get absolute values (magnitudes)
+        # Separate real and imaginary parts and get their absolute values
+        components = [
+            abs(self.max_value.real),
+            abs(self.max_value.imag),
+            abs(self.min_value.real),
+            abs(self.min_value.imag),
+        ]
+
+
+        # Get the order of magnitude (how many decimal zeros before significant digit)
+        power_of_10 = abs(np.floor(np.log10(components)))
+        self.highest_power_in_dataset = int(abs(max(power_of_10)))
+        # print("power of component:", power_of_10)
+        # print("Max power:", abs(max(power_of_10)))
+        print("sample: ", 10**self.highest_power_in_dataset)
+        self.normalizing_factor = 10**self.highest_power_in_dataset
         # ----------------------------------------------------------------------------
         self.real_min = np.min(self.data.real)
         self.real_max = np.max(self.data.real)
@@ -78,10 +94,10 @@ class ChannelSequenceDataset(Dataset):
         # imag_output = ((imag_output - self.imag_min) / (self.imag_max - self.imag_min)) 
         
         
-        real_input = real_input * 100000   
-        imag_input = imag_input * 100000   
-        real_output =  real_output * 100000
-        imag_output =  imag_output * 100000
+        real_input = real_input * self.normalizing_factor   
+        imag_input = imag_input * self.normalizing_factor   
+        real_output =  real_output * self.normalizing_factor
+        imag_output =  imag_output * self.normalizing_factor
 
 
         # print("after normalization real_input", real_input[0])
