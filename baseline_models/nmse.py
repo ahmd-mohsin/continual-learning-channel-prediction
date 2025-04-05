@@ -31,7 +31,9 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
         for snr_db in snr_db_list:
             total_nmse = 0.0
             total_samples = len(dataloader)
-            
+            test_total_sample = 0
+            # print("########################")
+            # print(total_samples)
             for X_batch, Y_batch in tqdm(dataloader, desc="Evaluating NMSE for SNR_DB: " + str(snr_db)):
                 
                 X_batch = X_batch.to(device)
@@ -50,12 +52,17 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
                 # Get channel prediction using the noisy input
                 prediction = model(X_noisy)
                 # Compute NMSE per batch: (error norm squared) / (true norm squared)
-                batch_nmse = torch.sum((prediction - Y_batch)**2) / (torch.sum(Y_batch**2))
+                # batch_nmse = torch.sum((prediction - Y_batch)**2) / (torch.sum(Y_batch**2))
+                batch_nmse = criterion(prediction, Y_batch) / (torch.sum(Y_batch**2))
+                # print("pred: ",torch.max(prediction), torch.min(prediction))
+                # print("y_batch: ",torch.max(Y_batch), torch.min(Y_batch))
                 # batch_nmse = criterion(prediction, Y_batch)
                 # Multiply by batch size and sum for weighted average
                 total_nmse += batch_nmse.item()
+                test_total_sample += 1
                 # print(f"Batch NMSE: {batch_nmse.item():.6f}")
-            nmse_results[snr_db] = total_nmse / total_samples
+            # nmse_results[snr_db] = total_nmse / total_samples
+            nmse_results[snr_db] = total_nmse / test_total_sample
             print(f"SNR: {snr_db} dB, NMSE: {nmse_results[snr_db]:.6f}")
     return nmse_results
 

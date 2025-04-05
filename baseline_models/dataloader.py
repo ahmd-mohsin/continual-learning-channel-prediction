@@ -43,6 +43,12 @@ class ChannelSequenceDataset(Dataset):
         # Recombine or feed separately to the model
         self.data = normalized_real + 1j * normalized_imag
 
+        # print("###############################")
+        # print("max_value real", np.min(normalized_real))
+        # print("min_value real", np.max(normalized_real))
+        # print("max_value imag", np.min(normalized_imag))
+        # print("min_value imag", np.max(normalized_imag))
+        # print("###############################")
         # ---------------------------------------------------------
 
         # # Find the max values for the entire dataset
