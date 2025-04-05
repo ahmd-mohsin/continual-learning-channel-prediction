@@ -1,31 +1,8 @@
-# import torch
-# import torch.nn as nn
-
-# class CustomLSTMModel(nn.Module):
-#     def __init__(self, input_size = 1, hidden_size = 32, num_layers = 3, output_size = 1):
-#         super(CustomLSTMModel, self).__init__()
-        
-#         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-#         self.fc = nn.Linear(hidden_size, output_size)
-    
-#     def forward(self, x):
-#         batch_size, channels, height, width, time_steps = x.shape  # (batch, 2, 18, 8, 3000)
-        
-#         # Reshape to feed into LSTM
-#         x = x.view(batch_size * channels * height * width, time_steps, -1)  # (batch * 2 * 18 * 8, 3000, feature_dim)
-#         lstm_out, _ = self.lstm(x)
-#         lstm_out = lstm_out[:, -1, :]  # (batch * 2 * 18 * 8, hidden_size)
-#         out = self.fc(lstm_out)  # (batch * 2 * 18 * 8, output_size)
-#         out = out.view(batch_size, channels, height, width)  # (batch, 2, 18, 8) 
-#         return out
-
-
-
-
 import torch
 import torch.nn as nn
 import math
 import torch.nn.functional as F
+from positionalembedder import get_embedder
 
 ###############################################################################
 # Helper function for Transformer masks (like in the notebook)
@@ -218,23 +195,8 @@ class LSTMModel(nn.Module):
 ###############################################################################
 class TransformerModel(nn.Module):
     """
-    A Transformer for time-series channel prediction.
-    
-    Expected input:
-      x of shape (batch, out_channels, H, W, seq_len)
-      
-    This model:
-      1. Flattens the (out_channels, H, W) dimensions into a vector of size:
-             input_size = out_channels * H * W
-      2. Projects each time step from input_size -> dim_val,
-         and adds positional encoding.
-      3. Uses the Transformer to decode a single time step.
-      4. Projects back to input_size and reshapes to
-             (batch, out_channels, H, W)
-    
-    Adjust out_channels, H, and W so that they match your target shape.
-    In our example, the dataloader returns targets with shape (batch, 4, 18, 2)
-    (i.e. 4 x 18 x 2 = 144 features).
+    A Transformer for time-series channel prediction, but now using the new
+    frequency-based positional encoding (PositionalEncoding).
     """
     def __init__(
         self, 
@@ -242,10 +204,11 @@ class TransformerModel(nn.Module):
         n_heads=4,
         n_encoder_layers=1,
         n_decoder_layers=1,
-        out_channels=2,   # default; for your data, use 4
+        out_channels=2,
         H=18,
         W=8,
-        seq_len=16
+        seq_len=16,
+        multires=6,  # extra arg to control embedder frequency levels
     ):
         super(TransformerModel, self).__init__()
         self.out_channels = out_channels
@@ -253,15 +216,17 @@ class TransformerModel(nn.Module):
         self.W = W
         self.seq_len = seq_len
 
-        # Derive flattened input size from out_channels, H, and W.
-        self.input_size = out_channels * H * W  
+        # Flattened size = out_channels * H * W
+        self.input_size = out_channels * H * W
         self.dim_val = dim_val
 
-        # 1) Project input vector (size=input_size) to dimension dim_val.
+        # 1) Project input vector (size=input_size) -> dimension dim_val
         self.input_projection = nn.Linear(self.input_size, dim_val)
-        # 2) Positional encoding.
-        self.pos_encoder = PositionalEncoding(dim_val)
-        # 3) Transformer block (with batch_first=True so that shape is (batch, seq_len, d_model)).
+
+        # 2) Use our new frequency-based positional encoding
+        self.pos_encoder = PositionalEncoding(d_model=dim_val, multires=multires)
+
+        # 3) Define the transformer
         self.transformer = nn.Transformer(
             d_model=dim_val,
             nhead=n_heads,
@@ -269,46 +234,51 @@ class TransformerModel(nn.Module):
             num_decoder_layers=n_decoder_layers,
             batch_first=True
         )
-        # 4) Map from dim_val back to the flattened vector of size input_size.
+
+        # 4) Final linear to map from dim_val back to input_size
         self.fc_out = nn.Linear(dim_val, self.input_size)
 
     def forward(self, x):
         """
         Args:
             x: Tensor of shape (batch, out_channels, H, W, seq_len)
+
         Returns:
             Tensor of shape (batch, out_channels, H, W)
         """
         batch_size = x.size(0)
-        # Flatten the (out_channels, H, W) dimensions for each time step.
-        # New shape: (batch, seq_len, out_channels * H * W)
+
+        # Flatten (out_channels, H, W) for each time step => (batch, seq_len, input_size)
         x = x.permute(0, 4, 1, 2, 3).reshape(batch_size, self.seq_len, -1)
-        
-        # Project each time step to dim_val and add positional encoding.
-        src = self.input_projection(x)       # Shape: (batch, seq_len, dim_val)
-        src = self.pos_encoder(src)
 
-        # Create a target sequence of length 1 (for single-step prediction).
+        # Project to dim_val
+        src = self.input_projection(x)  # (batch, seq_len, dim_val)
+
+        # Apply our new positional encoding
+        src = self.pos_encoder(src)     # (batch, seq_len, dim_val) [pos-encoded]
+
+        # Create a target sequence of length=1 for single-step prediction
         tgt = torch.zeros(batch_size, 1, self.dim_val, device=x.device)
-        tgt = self.pos_encoder(tgt)
+        tgt = self.pos_encoder(tgt)     # also pass tgt through the same pos encoder
 
-        # Create masks: source mask for the entire sequence, target mask for a single token.
+        # Build masks
         src_mask = generate_square_subsequent_mask(self.seq_len, self.seq_len).to(x.device)
         tgt_mask = generate_square_subsequent_mask(1, 1).to(x.device)
 
-        # Run the Transformer decoder.
+        # Pass through the Transformer
         out = self.transformer(
             src=src,
             tgt=tgt,
             src_mask=src_mask,
             tgt_mask=tgt_mask
-        )  # Shape: (batch, 1, dim_val)
+        )  # => (batch, 1, dim_val)
 
-        # Map back to the flattened channel vector.
-        out = self.fc_out(out).squeeze(1)  # Shape: (batch, input_size)
+        # Final projection back to (out_channels * H * W)
+        out = self.fc_out(out).squeeze(1)  # => (batch, input_size)
+
         # Reshape to (batch, out_channels, H, W)
         out = out.view(batch_size, self.out_channels, self.H, self.W)
-        # out = F.relu(out)
+
         return out
 
 
@@ -316,24 +286,49 @@ class TransformerModel(nn.Module):
 # Positional Encoding (commonly used in Transformers)
 ###############################################################################
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
+    """
+    Wraps the frequency-based embedder (from positionalembber.py)
+    so that it can replace the old sinusoidal PositionalEncoding.
+    """
+
+    def __init__(self, d_model, multires=6):
+        """
+        Args:
+            d_model (int): The 'model dimension' that the Transformer uses.
+            multires (int): Number of frequency bands (L) for the embedder.
+                            Increase/decrease as you like.
+        """
         super(PositionalEncoding, self).__init__()
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+
+        # Build the embedder configured to take in dimension = d_model
+        self.embedder, embed_dim = get_embedder(
+            multires,           # e.g. 6 or 10
+            input_dims=d_model, # we treat each 'd_model' channel as an input
+            include_input=True
         )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)  # shape: (1, max_len, d_model)
-        self.register_buffer('pe', pe)
+
+        # If embedder's output dimension differs from d_model,
+        # define a linear layer to project it back to d_model
+        self.need_projection = (embed_dim != d_model)
+        if self.need_projection:
+            self.proj = nn.Linear(embed_dim, d_model)
 
     def forward(self, x):
         """
         Args:
-            x: Tensor of shape (batch, seq_len, d_model)
+            x: Tensor of shape (batch_size, seq_len, d_model)
+
         Returns:
-            Tensor with positional encodings added.
+            Tensor of shape (batch_size, seq_len, d_model),
+            with the frequency-based positional encodings.
         """
-        seq_len = x.size(1)
-        return x + self.pe[:, :seq_len, :]
+        # Apply the multi-frequency embedder
+        # shape after embedder: (batch, seq_len, embed_dim)
+        encoded = self.embedder(x)
+
+        # If embed_dim != d_model, project back down
+        if self.need_projection:
+            encoded = self.proj(encoded)
+
+        return encoded
+
