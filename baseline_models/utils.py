@@ -128,7 +128,7 @@ def evaluate_model(model, dataloader, device, log_file="evaluation_log.csv"):
     avg_loss = total_loss / num_batches
 
     # Append evaluation loss to a CSV if desired
-    with open(log_file, mode='a', newline='') as file:
+    with open(log_file, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["Evaluation Loss", avg_loss])
 

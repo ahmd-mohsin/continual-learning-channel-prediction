@@ -28,36 +28,54 @@ class ChannelSequenceDataset(Dataset):
     
         self.overlapping_index = 16
 
-        # Find the max values for the entire dataset
-        self.max_value = np.max(self.data)  # The absolute max value across both real and imaginary parts
-        self.min_value = np.min(self.data)  # The absolute max value across both real and imaginary parts
-        # self.max_value = np.max(np.abs(self.data))  # The absolute max value across both real and imaginary parts
-        # self.min_value = np.min(np.abs(self.data))  # The absolute max value across both real and imaginary parts
+        # Normalize the entire complex vector
+        # ---------------------------------------------------------
+        real = self.data.real
+        imag = self.data.imag
+
+        # Normalize real and imaginary separately
+        real_min, real_max = real.min(), real.max()
+        imag_min, imag_max = imag.min(), imag.max()
+
+        normalized_real = (real - real_min) / (real_max - real_min)
+        normalized_imag = (imag - imag_min) / (imag_max - imag_min)
+
+        # Recombine or feed separately to the model
+        self.data = normalized_real + 1j * normalized_imag
+
+        # ---------------------------------------------------------
+
+        # # Find the max values for the entire dataset
+        # self.max_value = np.max(self.data)  # The absolute max value across both real and imaginary parts
+        # self.min_value = np.min(self.data)  # The absolute max value across both real and imaginary parts
+        # # self.max_value = np.max(np.abs(self.data))  # The absolute max value across both real and imaginary parts
+        # # self.min_value = np.min(np.abs(self.data))  # The absolute max value across both real and imaginary parts
         # print("###############################")
         # print("max_value", self.max_value)
         # print("min_value", self.min_value)
-        # Get absolute values (magnitudes)
-        # Separate real and imaginary parts and get their absolute values
-        components = [
-            abs(self.max_value.real),
-            abs(self.max_value.imag),
-            abs(self.min_value.real),
-            abs(self.min_value.imag),
-        ]
+        # print("###############################")
+        # # Get absolute values (magnitudes)
+        # # Separate real and imaginary parts and get their absolute values
+        # components = [
+        #     abs(self.max_value.real),
+        #     abs(self.max_value.imag),
+        #     abs(self.min_value.real),
+        #     abs(self.min_value.imag),
+        # ]
 
 
-        # Get the order of magnitude (how many decimal zeros before significant digit)
-        power_of_10 = abs(np.floor(np.log10(components)))
-        self.highest_power_in_dataset = int(abs(max(power_of_10)))
-        # print("power of component:", power_of_10)
-        # print("Max power:", abs(max(power_of_10)))
-        print("sample: ", 10**self.highest_power_in_dataset)
-        self.normalizing_factor = 10**self.highest_power_in_dataset
+        # # Get the order of magnitude (how many decimal zeros before significant digit)
+        # power_of_10 = abs(np.floor(np.log10(components)))
+        # self.highest_power_in_dataset = int(abs(max(power_of_10)))
+        # # print("power of component:", power_of_10)
+        # # print("Max power:", abs(max(power_of_10)))
+        # print("sample: ", 10**self.highest_power_in_dataset)
+        # self.normalizing_factor = 10**self.highest_power_in_dataset
         # ----------------------------------------------------------------------------
-        self.real_min = np.min(self.data.real)
-        self.real_max = np.max(self.data.real)
-        self.imag_min = np.min(self.data.imag)
-        self.imag_max = np.max(self.data.imag)
+        # self.real_min = np.min(self.data.real)
+        # self.real_max = np.max(self.data.real)
+        # self.imag_min = np.min(self.data.imag)
+        # self.imag_max = np.max(self.data.imag)
 
 
     def __len__(self):
@@ -94,10 +112,10 @@ class ChannelSequenceDataset(Dataset):
         # imag_output = ((imag_output - self.imag_min) / (self.imag_max - self.imag_min)) 
         
         
-        real_input = real_input * self.normalizing_factor   
-        imag_input = imag_input * self.normalizing_factor   
-        real_output =  real_output * self.normalizing_factor
-        imag_output =  imag_output * self.normalizing_factor
+        # real_input = real_input * self.normalizing_factor   
+        # imag_input = imag_input * self.normalizing_factor   
+        # real_output =  real_output * self.normalizing_factor
+        # imag_output =  imag_output * self.normalizing_factor
 
 
         # print("after normalization real_input", real_input[0])
