@@ -199,8 +199,13 @@ def infer(valid_queue, model, criterion):
   top1 = utils.AvgrageMeter()
   top5 = utils.AvgrageMeter()
   model.eval()
+  
+  
+  valid_queue = tqdm(enumerate(valid_queue), total=len(valid_queue), desc="Inference of validation", leave=True)
 
-  for step, (input, target) in enumerate(valid_queue):
+  for step, (input, target) in valid_queue:
+    # if step > 5:
+    #   break
     input = Variable(input, volatile=True).cuda()
     # target = Variable(target, volatile=True).cuda(async=True)
     target = Variable(target, volatile=True).cuda()
