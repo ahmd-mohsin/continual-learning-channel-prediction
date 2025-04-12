@@ -151,6 +151,8 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
 
   # for step, (input, target) in enumerate(train_queue):
   for step, (input, target) in train_queue:
+    # if step > 5:
+    #   break
     model.train()
     n = input.size(0)
 
@@ -206,14 +208,16 @@ def infer(valid_queue, model, criterion):
     logits = model(input)
     loss = criterion(logits, target)
 
-    prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
+    # prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
     n = input.size(0)
     # objs.update(loss.data[0], n)
     # top1.update(prec1.data[0], n)
     # top5.update(prec5.data[0], n)
     objs.update(loss.item(), n)
-    top1.update(prec1.item(), n)
-    top5.update(prec5.item(), n)
+    top1.update(loss.item(), n)
+    top5.update(loss.item(), n)
+    # top1.update(prec1.item(), n)
+    # top5.update(prec5.item(), n)
 
     if step % args.report_freq == 0:
       logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
