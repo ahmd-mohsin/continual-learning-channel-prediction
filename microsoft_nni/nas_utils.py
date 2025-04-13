@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 import nni
 from dataloader import ChannelSequenceDataset
+from tqdm import tqdm
 
 # from model import *
 def compute_device():
@@ -36,42 +37,79 @@ train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train
 
 def train_epoch(model, loader, optimizer, loss_fn, device):
     model.train()
-    for x, y in loader:
-        # print("test_epoch x shape:", x.shape)
+    # Wrap the training loader with tqdm and use enumerate to get batch index
+    for idx, (x, y) in enumerate(tqdm(loader, desc='Training', leave=False)):
+        # if idx > 2:
+        #     break
         x, y = x.to(device), y.to(device)
         optimizer.zero_grad()
         pred = model(x)
         loss = loss_fn(pred, y)
         loss.backward()
         optimizer.step()
+        # Optionally, log or print the index and loss:
+        # print(f"Batch {idx}: loss = {loss.item()}")
 
 def test_epoch(model, loader, loss_fn, device):
     model.eval()
     total, count = 0.0, 0
+    # Wrap the testing loader with tqdm and use enumerate to get batch index
     with torch.no_grad():
-        for x, y in loader:
-            # print("test_epoch x shape:", x.shape)
+        for idx, (x, y) in enumerate(tqdm(loader, desc='Testing', leave=False)):
+            # if idx > 2:
+            #     break
             x, y = x.to(device), y.to(device)
             pred = model(x)
             total += loss_fn(pred, y).item() * x.size(0)
             count += x.size(0)
+            # Optionally, log the batch index:
+            # print(f"Testing batch {idx} processed.")
     return total / count
 
 def evaluate_model(model):
-    # print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    valid_loader = DataLoader(test_dataset, batch_size=16)
+    # Assuming train_dataset and test_dataset are defined elsewhere in your project
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    valid_loader = DataLoader(test_dataset, batch_size=64)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     loss_fn   = torch.nn.MSELoss()
 
-    # train & report intermediate results
-    for epoch in range(5):
+    # Wrap the epoch loop with tqdm to display a progress bar with the description "Epochs"
+    for epoch in tqdm(range(5), desc='Epochs'):
         train_epoch(model, train_loader, optimizer, loss_fn, device)
         val_loss = test_epoch(model, valid_loader, loss_fn, device)
         nni.report_intermediate_result(val_loss)
-
-    # final result
     nni.report_final_result(val_loss)
+
+
+    # import json
+    # import time
+    # time.sleep(2)
+    # val_loss = float(0.12345)
+    # nni.report_intermediate_result(val_loss)
+
+    # time.sleep(2)
+    # nni.report_final_result(val_loss)
+    # return val_loss
+
+    # import time
+    # try:
+    #     # Your evaluation logic here
+    #     val_loss = 0.12345
+        
+    #     # Report intermediate result
+    #     nni.report_intermediate_result(float(val_loss))
+    #     time.sleep(1)  # Give time for communication
+        
+    #     # Report final result
+    #     nni.report_final_result(float(val_loss))
+    #     time.sleep(1)  # Give time for communication
+        
+    #     return float(val_loss)
+    # except Exception as e:
+    #     print(f"Error in evaluation: {e}")
+    #     # Report a default value on error
+    #     nni.report_final_result(1.0)
+    #     return 1.0

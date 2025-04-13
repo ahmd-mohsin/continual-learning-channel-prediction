@@ -7,7 +7,7 @@ import nni
 import nni.nas.nn.pytorch as nasnn
 from nni.nas.evaluator import FunctionalEvaluator
 from nni.nas.experiment import NasExperiment
-from nni.nas.nn.pytorch.layers import Linear, Transformer
+from nni.nas.nn.pytorch.layers import Linear, Transformer, MutableTransformer, MutableLinear
 from dataloader import ChannelSequenceDataset
 from dataclasses import dataclass
 import torch
@@ -15,8 +15,8 @@ import torch
 import math
 # import torch.nn.functional as F
 from nni.nas.nn.pytorch.layers import Linear, Transformer  # NAS‑aware Transformer
-# import logging
-# logging.getLogger('websocket').setLevel(logging.INFO)
+import logging
+logging.getLogger('websocket').setLevel(logging.DEBUG)
 
 ###############################################################################
 from dataclasses import dataclass
@@ -66,7 +66,7 @@ class PositionalEncoding(nasnn.ModelSpace):
         # self.need_projection = (embed_dim != d_model)
         # if self.need_projection:
         #     self.proj = nn.Linear(embed_dim, d_model)
-        self.proj = Linear(embed_dim, d_model)
+        self.proj = MutableLinear(embed_dim, d_model)
     def forward(self, x):
         """
         Args:
@@ -88,7 +88,20 @@ class PositionalEncoding(nasnn.ModelSpace):
 
 
 from nni.nas.nn.pytorch.layers import Linear  # NAS‑aware Linear
-
+def compute_device():
+    """
+    Determines the best available computing device (CUDA, MPS, or CPU).
+    """
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA for computation")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("Using MPS (Metal Performance Shaders) for computation")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU for computation")
+    return device
 # ─── Embedder Config ─────────────────────────────────────────────────────────
 @dataclass
 class EmbedderConfig:
@@ -168,9 +181,9 @@ class TransformerModelSpace(nasnn.ModelSpace):
         # hyper‑param choices
         # self.dim_val          = nni.choice('dim_val',          [16, 32])
         self.dim_val          = 128
-        self.n_heads         = nni.choice('n_heads',         [2, 4, 6  ])
-        self.n_encoder_layers = nni.choice('n_encoder_layers', [1,   2])
-        self.n_decoder_layers = nni.choice('n_decoder_layers', [1,   2  ])
+        self.n_heads         = nni.choice("heads",         [2,4,8,16])
+        self.n_encoder_layers = nni.choice("encoder_layers", [1,2])
+        self.n_decoder_layers = nni.choice("decoder_layers", [1,2])
         # self.dim_val          = nni.choice('dim_val',          [64, 128, 256])
         # self.n_heads         = nni.choice('n_heads',         [2,   4,   8  ])
         # self.n_encoder_layers = nni.choice('n_encoder_layers', [1,   2,   4,   6])
@@ -183,18 +196,19 @@ class TransformerModelSpace(nasnn.ModelSpace):
 
         # shared modules
         # self.input_projection = nn.Linear(self.input_size, self.dim_val)
-        self.input_projection = Linear(self.input_size, self.dim_val)
+        self.input_projection = MutableLinear(self.input_size, self.dim_val)
         # self.input_projection = nasnn.Linear(self.input_size, self.dim_val)
         self.pos_encoder      = PositionalEncoding(d_model=self.dim_val,
                                                    multires=self.multires)
-        self.transformer      = Transformer(
+        # self.transformer      = Transformer(
+        self.transformer      = MutableTransformer(
             d_model=self.dim_val,
             nhead=self.n_heads,
             num_encoder_layers=self.n_encoder_layers,
             num_decoder_layers=self.n_decoder_layers,
             batch_first=True
         )
-        self.fc_out = Linear(self.dim_val, self.input_size)
+        self.fc_out = MutableLinear(self.dim_val, self.input_size)
 
     def forward(self, x):
         B = x.size(0)
@@ -225,24 +239,32 @@ import nni.nas.strategy as strategy
 
 # ─── 3) Launch NAS Experiment ────────────────────────────────────────────────
 from nas_utils import evaluate_model
-if __name__ == '__main__':
-    model_space     = TransformerModelSpace()
-    # print("----------------------------------")
-    # model_space = nasnn.ModelSpace()
-    # print("Model space created")
-    # print(model_space)
-    evaluator       = FunctionalEvaluator(evaluate_model)
-    search_strategy = strategy.Random()  # dedup=False if deduplication is not wanted
-    # print("----------------------------------")
-    exp = NasExperiment(model_space, evaluator, search_strategy)
-    # print("----------------------------------")
+# import websocket
+# websocket.enableTrace(True)  # Enable tracing for websocket
 
-    # customize experiment settings
-    exp.config.max_trial_number   = 3
-    exp.config.trial_concurrency  = 2
-    exp.config.trial_gpu_number   = 0
-    exp.config.training_service.use_active_gpu = True
 
-    # run on port 8081
-    exp.run(8081)
-    # print("Experiment started! Web UI at http://localhost:8081")
+# if __name__ == '__main__':
+device = compute_device()
+model_space     = TransformerModelSpace().to(device)  
+# print("----------------------------------")
+# model_space = nasnn.ModelSpace()
+# print("Model space created")
+# print(model_space)
+evaluator       = FunctionalEvaluator(evaluate_model)
+search_strategy = strategy.PolicyBasedRL()  # dedup=False if deduplication is not wanted
+# print("----------------------------------")
+exp = NasExperiment(model_space, evaluator, search_strategy)
+# print("----------------------------------")
+
+# customize experiment settings
+exp.config.max_trial_number   = 2
+exp.config.trial_concurrency  = 1
+exp.config.training_service.use_active_gpu = True
+exp.config.trial_gpu_number   = 0
+
+# run on port 8081
+exp.run(port=8081)
+
+# resolve the connection error
+# https://github.com/microsoft/nni/issues/5684
+# print("Experiment started! Web UI at http://localhost:8081")
