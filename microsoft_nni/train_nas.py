@@ -1,7 +1,7 @@
 import os
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+# import torch.nn as nn
+# import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import nni
 import nni.nas.nn.pytorch as nasnn
@@ -11,12 +11,12 @@ from nni.nas.nn.pytorch.layers import Linear, Transformer
 from dataloader import ChannelSequenceDataset
 from dataclasses import dataclass
 import torch
-import torch.nn as nn
+# import torch.nn as nn
 import math
-import torch.nn.functional as F
+# import torch.nn.functional as F
 from nni.nas.nn.pytorch.layers import Linear, Transformer  # NAS‑aware Transformer
-import logging
-logging.getLogger('websocket').setLevel(logging.INFO)
+# import logging
+# logging.getLogger('websocket').setLevel(logging.INFO)
 
 ###############################################################################
 from dataclasses import dataclass
@@ -25,7 +25,6 @@ from typing import Callable, List, Tuple, Union
 import torch
 import torch.nn as nn
 from nni.nas.nn.pytorch.layers import Linear  # NAS‑aware Linear
-
 
 
 
@@ -40,7 +39,7 @@ def generate_square_subsequent_mask(sz1, sz2):
 
 
 from nni.nas.nn.pytorch.layers import Linear  # NAS‑aware Linear
-class PositionalEncoding(nn.Module):
+class PositionalEncoding(nasnn.ModelSpace):
     """
     Wraps the frequency-based embedder (from positionalembber.py)
     so that it can replace the old sinusoidal PositionalEncoding.
@@ -105,7 +104,7 @@ class EmbedderConfig:
             self.periodic_fns = [torch.sin, torch.cos]
 
 # ─── Embedder ─────────────────────────────────────────────────────────────────
-class Embedder(nn.Module):
+class Embedder(nasnn.ModelSpace):
     def __init__(self, config: EmbedderConfig):
         super().__init__()
         self.config = config
@@ -164,11 +163,12 @@ def get_embedder(
 
 class TransformerModelSpace(nasnn.ModelSpace):
     def __init__(self,
-                 out_channels=2, H=18, W=8, seq_len=16):
+                 out_channels=4, H=18, W=16, seq_len=16):
         super().__init__()
         # hyper‑param choices
-        self.dim_val          = nni.choice('dim_val',          [16, 32])
-        self.n_heads         = nni.choice('n_heads',         [2, 4  ])
+        # self.dim_val          = nni.choice('dim_val',          [16, 32])
+        self.dim_val          = 128
+        self.n_heads         = nni.choice('n_heads',         [2, 4, 6  ])
         self.n_encoder_layers = nni.choice('n_encoder_layers', [1,   2])
         self.n_decoder_layers = nni.choice('n_decoder_layers', [1,   2  ])
         # self.dim_val          = nni.choice('dim_val',          [64, 128, 256])
@@ -199,10 +199,11 @@ class TransformerModelSpace(nasnn.ModelSpace):
     def forward(self, x):
         B = x.size(0)
         # x: (B, out_ch, H, W, seq_len)
+        # print("------------------------")
+        # print(x.shape)
         x = x.permute(0,4,1,2,3).reshape(B, self.seq_len, -1)
-        print("------------------------")
-        print(x.shape)
-        print("------------------------")
+        # print(x.shape)
+        # print("------------------------")
         src = self.input_projection(x)
         src = self.pos_encoder(src)
         tgt = torch.zeros(B, 1, self.dim_val, device=x.device)
@@ -226,22 +227,22 @@ import nni.nas.strategy as strategy
 from nas_utils import evaluate_model
 if __name__ == '__main__':
     model_space     = TransformerModelSpace()
-    print("----------------------------------")
+    # print("----------------------------------")
     # model_space = nasnn.ModelSpace()
-    print("Model space created")
+    # print("Model space created")
     # print(model_space)
     evaluator       = FunctionalEvaluator(evaluate_model)
     search_strategy = strategy.Random()  # dedup=False if deduplication is not wanted
-    print("----------------------------------")
+    # print("----------------------------------")
     exp = NasExperiment(model_space, evaluator, search_strategy)
-    print("----------------------------------")
+    # print("----------------------------------")
 
     # customize experiment settings
     exp.config.max_trial_number   = 3
-    exp.config.trial_concurrency  = 1
-    exp.config.trial_gpu_number   = 1
+    exp.config.trial_concurrency  = 2
+    exp.config.trial_gpu_number   = 0
     exp.config.training_service.use_active_gpu = True
 
     # run on port 8081
-    exp.run(6500)
-    print("Experiment started! Web UI at http://localhost:8081")
+    exp.run(8081)
+    # print("Experiment started! Web UI at http://localhost:8081")

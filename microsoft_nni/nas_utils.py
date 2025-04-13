@@ -1,7 +1,7 @@
 
 # nas_utils.py
 import torch
-import torch.nn as nn
+# import torch.nn as nn
 from torch.utils.data import DataLoader
 import nni
 from dataloader import ChannelSequenceDataset
@@ -13,31 +13,31 @@ def compute_device():
     """
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        print("Using CUDA for computation")
+        # print("Using CUDA for computation")
     elif torch.backends.mps.is_available():
         device = torch.device("mps")
-        print("Using MPS (Metal Performance Shaders) for computation")
+        # print("Using MPS (Metal Performance Shaders) for computation")
     else:
         device = torch.device("cpu")
-        print("Using CPU for computation")
+        # print("Using CPU for computation")
     return device
 
 
 device  = compute_device()
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print("Using device:", device)
+# print("Using device:", device)
 full_dataset = ChannelSequenceDataset("/home/ahsan/Ahsan/PhD_work/nas-wireless/dataset/outputs/umi_compact_conf_2tx_2rx.", "mat", device)
 train_size = int(0.8 * len(full_dataset))
 val_size = len(full_dataset) - train_size
     
 train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
-print("train_dataset size:", len(train_dataset))
-print("test_dataset size:", len(test_dataset))
+# print("train_dataset size:", len(train_dataset))
+# print("test_dataset size:", len(test_dataset))
 
 def train_epoch(model, loader, optimizer, loss_fn, device):
     model.train()
     for x, y in loader:
-        print("test_epoch x shape:", x.shape)
+        # print("test_epoch x shape:", x.shape)
         x, y = x.to(device), y.to(device)
         optimizer.zero_grad()
         pred = model(x)
@@ -50,7 +50,7 @@ def test_epoch(model, loader, loss_fn, device):
     total, count = 0.0, 0
     with torch.no_grad():
         for x, y in loader:
-            print("test_epoch x shape:", x.shape)
+            # print("test_epoch x shape:", x.shape)
             x, y = x.to(device), y.to(device)
             pred = model(x)
             total += loss_fn(pred, y).item() * x.size(0)
@@ -58,14 +58,14 @@ def test_epoch(model, loader, loss_fn, device):
     return total / count
 
 def evaluate_model(model):
-    print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-    valid_loader = DataLoader(test_dataset, batch_size=2)
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    valid_loader = DataLoader(test_dataset, batch_size=16)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    loss_fn   = nn.MSELoss()
+    loss_fn   = torch.nn.MSELoss()
 
     # train & report intermediate results
     for epoch in range(5):

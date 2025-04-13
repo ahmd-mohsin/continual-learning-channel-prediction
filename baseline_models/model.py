@@ -204,9 +204,9 @@ class TransformerModel(nn.Module):
         n_heads=4,
         n_encoder_layers=1,
         n_decoder_layers=1,
-        out_channels=2,
+        out_channels=4,
         H=18,
-        W=8,
+        W=16,
         seq_len=16,
         multires=6,  # extra arg to control embedder frequency levels
     ):
