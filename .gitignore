@@ -3,7 +3,7 @@
 .vscode/
 .DS_store
 prompts/
-
+datatset/
 # matlab
 *.mat
 *.pkl
