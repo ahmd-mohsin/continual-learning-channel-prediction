@@ -39,8 +39,8 @@ def train_epoch(model, loader, optimizer, loss_fn, device):
     model.train()
     # Wrap the training loader with tqdm and use enumerate to get batch index
     for idx, (x, y) in enumerate(tqdm(loader, desc='Training', leave=False)):
-        # if idx > 2:
-        #     break
+        if idx > int(len(loader)/2):
+            break
         x, y = x.to(device), y.to(device)
         optimizer.zero_grad()
         pred = model(x)
@@ -56,8 +56,8 @@ def test_epoch(model, loader, loss_fn, device):
     # Wrap the testing loader with tqdm and use enumerate to get batch index
     with torch.no_grad():
         for idx, (x, y) in enumerate(tqdm(loader, desc='Testing', leave=False)):
-            # if idx > 2:
-            #     break
+            if idx > int(len(loader)/2):
+                break
             x, y = x.to(device), y.to(device)
             pred = model(x)
             total += loss_fn(pred, y).item() * x.size(0)

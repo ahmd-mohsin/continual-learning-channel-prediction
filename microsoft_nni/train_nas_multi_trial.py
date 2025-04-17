@@ -257,13 +257,13 @@ exp = NasExperiment(model_space, evaluator, search_strategy)
 # print("----------------------------------")
 
 # customize experiment settings
-exp.config.max_trial_number   = 2
+exp.config.max_trial_number   = 16
 exp.config.trial_concurrency  = 1
 exp.config.training_service.use_active_gpu = True
 exp.config.trial_gpu_number   = 0
 
 # run on port 8081
-exp.run(port=8081)
+exp.run(port=8080)
 
 # resolve the connection error
 # https://github.com/microsoft/nni/issues/5684
