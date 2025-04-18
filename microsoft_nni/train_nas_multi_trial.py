@@ -1,7 +1,5 @@
 import os
 import torch
-# import torch.nn as nn
-# import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import nni
 import nni.nas.nn.pytorch as nasnn
@@ -11,7 +9,7 @@ from nni.nas.nn.pytorch.layers import Linear, Transformer, MutableTransformer, M
 from dataloader import ChannelSequenceDataset
 from dataclasses import dataclass
 import torch
-# import torch.nn as nn
+from nni.nas.nn.pytorch.layers import Linear  # NAS‑aware Linear
 import math
 # import torch.nn.functional as F
 from nni.nas.nn.pytorch.layers import Linear, Transformer  # NAS‑aware Transformer
@@ -28,10 +26,7 @@ from nni.nas.nn.pytorch.layers import Linear  # NAS‑aware Linear
 
 
 
-# def get_embedder(multires, input_dims, include_input):
-#     # returns (embed_fn, embed_dim)
-#     # e.g. from your positionalembeder.py
-#     raise NotImplementedError
+
 
 def generate_square_subsequent_mask(sz1, sz2):
     # your mask function
@@ -87,7 +82,6 @@ class PositionalEncoding(nasnn.ModelSpace):
         return encoded
 
 
-from nni.nas.nn.pytorch.layers import Linear  # NAS‑aware Linear
 def compute_device():
     """
     Determines the best available computing device (CUDA, MPS, or CPU).
