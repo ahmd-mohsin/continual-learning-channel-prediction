@@ -227,8 +227,8 @@ if __name__ == "__main__":
     csv_rows = [['Task', 'SNR', 'NMSE']]
     for task, res in nmse_results.items():
         for snr, nmse in res.items():
-            print(f"Task {task} | SNR {snr:2d} → NMSE {nmse:.4f}")
-            csv_rows.append([task, snr, f"{nmse:.6f}"])
+            print(f"Task {task} | SNR {snr:2d} → NMSE {nmse}")
+            csv_rows.append([task, snr, f"{nmse}"])
 
     if args.use_distill:
         csv_path = f"{args.sampling}_distill_nmse_results.csv"
