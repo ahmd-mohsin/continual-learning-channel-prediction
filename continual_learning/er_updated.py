@@ -68,19 +68,33 @@ def reservoir_add(x, y, teacher_pred, loss_val):
     seen_examples += 1
 
     if len(memory_x) < memory_capacity:
-        memory_x.append(x.cpu())
-        memory_y.append(y.cpu())
-        memory_teacher.append(teacher_pred.cpu())
+        memory_x.append(x)
+        memory_y.append(y)
+        memory_teacher.append(teacher_pred)
         memory_loss.append(loss_val)
         return
 
     j = random.randint(0, seen_examples - 1)
     if j < memory_capacity:
         victim = lars_pick_victim() if args.sampling == 'lars' else j
-        memory_x[victim]       = x.cpu()
-        memory_y[victim]       = y.cpu()
-        memory_teacher[victim] = teacher_pred.cpu()
+        memory_x[victim]       = x
+        memory_y[victim]       = y
+        memory_teacher[victim] = teacher_pred
         memory_loss[victim]    = loss_val
+    # if len(memory_x) < memory_capacity:
+    #     memory_x.append(x.cpu())
+    #     memory_y.append(y.cpu())
+    #     memory_teacher.append(teacher_pred.cpu())
+    #     memory_loss.append(loss_val)
+    #     return
+
+    # j = random.randint(0, seen_examples - 1)
+    # if j < memory_capacity:
+    #     victim = lars_pick_victim() if args.sampling == 'lars' else j
+    #     memory_x[victim]       = x.cpu()
+    #     memory_y[victim]       = y.cpu()
+    #     memory_teacher[victim] = teacher_pred.cpu()
+    #     memory_loss[victim]    = loss_val
 
 # ---------------------------------------------------------------------
 # Dataset wrapper for distillation
