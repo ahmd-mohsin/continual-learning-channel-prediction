@@ -37,17 +37,17 @@ def get_all_datasets(data_dir, batch_size = 16, dataset_id = 1):
     train_S3 = test_S3 = train_loader_S3 = test_loader_S3 = None
 
     if dataset_id == 1 or dataset_id == 'all':
-        s1_path = os.path.join(data_dir, "umi_compact_conf_2tx_2rx.")
+        s1_path = os.path.join(data_dir, "umi_compact_8Tx_2Rx.")
         train_S1, test_S1, train_loader_S1, test_loader_S1 = load_dataset(s1_path)
         print(f"Loaded S1: {len(train_S1)} train samples, {len(test_S1)} test samples")
 
     if dataset_id == 2 or dataset_id == 'all':
-        s2_path = os.path.join(data_dir, "umi_dense_conf_8tx_2rx.")
+        s2_path = os.path.join(data_dir, "umi_dense_8Tx_2Rx.")
         train_S2, test_S2, train_loader_S2, test_loader_S2 = load_dataset(s2_path)
         print(f"Loaded S2: {len(train_S2)} train samples, {len(test_S2)} test samples")
 
     if dataset_id == 3 or dataset_id == 'all':
-        s3_path = os.path.join(data_dir, "umi_standard_conf_16tx_2rx.")
+        s3_path = os.path.join(data_dir, "umi_standard_8Tx_2Rx.")
         train_S3, test_S3, train_loader_S3, test_loader_S3 = load_dataset(s3_path)
         print(f"Loaded S3: {len(train_S3)} train samples, {len(test_S3)} test samples")
 

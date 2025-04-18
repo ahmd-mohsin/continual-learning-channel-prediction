@@ -20,8 +20,9 @@ import csv
 # Load datasets
 data_dir = "../dataset/outputs/"  # Adjust this path to your dataset location
 print("Loading datasets...")
-train_S1, test_S1, train_S2, test_S2, train_S3, test_S3, train_loader_S1, test_loader_S1, train_loader_S2, test_loader_S2, train_loader_S3, test_loader_S3 = get_all_datasets(data_dir, dataset_id="all")
+train_S1, test_S1, train_S2, test_S2, train_S3, test_S3, train_loader_S1, test_loader_S1, train_loader_S2, test_loader_S2, train_loader_S3, test_loader_S3 = get_all_datasets(data_dir, dataset_id=1)
 # get_all_datasets(data_dir)
+# print("S1 Dataset: ", len(train_S1))
 print("Loaded datasets successfully.")
 device = compute_device()
 
@@ -30,12 +31,13 @@ model_er = LSTMModel(input_dim=1,
             hidden_dim=32,
             output_dim=1,
             n_layers=3,
-            H=16,
-            W=36).to(device)
+            H=36,
+            W=64).to(device)
 optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-5)
 criterion = nn.MSELoss()
 
-num_epochs = 2
+
+num_epochs = 10
 memory = []              # global memory buffer (list of (X, Y) tensors)
 memory_capacity = 500    # max samples to store from each task (adjust as needed)
 
@@ -74,6 +76,8 @@ for epoch in range(num_epochs):
 
     avg_loss = running_loss / len(train_loader_S1)
     print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
+
+
 
 # Store some samples from S1 in replay memory
 add_to_memory(train_S1, num_samples=memory_capacity)

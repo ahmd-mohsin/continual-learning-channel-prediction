@@ -83,6 +83,9 @@ class ChannelSequenceDataset(Dataset):
         # self.imag_min = np.min(self.data.imag)
         # self.imag_max = np.max(self.data.imag)
 
+        print("###############################")
+        print(self.data.shape)
+        print("###############################")
 
     def __len__(self):
         return self.num_users * (self.time_length - (self.overlapping_index + 1))
@@ -137,7 +140,9 @@ class ChannelSequenceDataset(Dataset):
         input_data = torch.cat([real_input, imag_input], dim=0)
         output_data = torch.cat([real_output, imag_output], dim=0)
         # Get the second last dimension
-        # print("input_data shape", input_data.shape)
+        # print("------------------------------------------")
+        # print("input_data shape", output_data.shape)
+        # print("------------------------------------------")
         
         # for input
         current_size = input_data.shape[2]
