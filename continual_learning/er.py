@@ -4,6 +4,9 @@ from dataloader import ChannelSequenceDataset
 import random
 import torch.nn as nn
 import torch
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
 from utils import compute_device
 from torch.utils.data import DataLoader, random_split, ConcatDataset, TensorDataset
 from nmse import *

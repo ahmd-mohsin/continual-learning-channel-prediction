@@ -1,4 +1,4 @@
-## Papper requirements
+## Paper requirements
 
 1. System Model missing
 2. Algorithm
@@ -7,6 +7,16 @@
 5. 3 results different benchmarks in each to be compared
 6. Appendix Tables for different experimental settings
 7. Table for Netowrk settings
+
+---
+Experience Replay (GRU, LSTm , Transformer)
+
+1. 
+2. 
+3. 
+4. 
+
+---
 
 
 
