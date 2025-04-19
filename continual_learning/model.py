@@ -136,13 +136,15 @@ class GRUModel(nn.Module):
 
     def forward(self, x):
         # x shape: (batch, 2, H, W, seq_len)
-        batch_size, two, H, W, seq_len = x.shape
+        # batch_size, two, H, W, seq_len = x.shape
+        batch_size, real_imag, num_tran, resource_block, num_rece, seq_len = x.shape
+
 
         # Flatten the matrix for each time step:
         # After flattening, each time step is a vector of size (2*H*W).
         # So we reshape into (batch, seq_len, 2*H*W).
-        x = x.permute(0, 4, 1, 2, 3)  # => (batch, seq_len, 2, H, W)
-        x = x.reshape(batch_size, seq_len, two * H * W)
+        x = x.permute(0, 5, 1, 2, 3,4)  # => (batch, seq_len, 2, H, W)
+        x = x.reshape(batch_size, seq_len, real_imag *  num_tran *  resource_block *  num_rece)
 
         # Pass through GRU
         out, _ = self.gru(x)  # out shape: (batch, seq_len, hidden_dim)
@@ -151,7 +153,7 @@ class GRUModel(nn.Module):
 
         # Map to (2*H*W)
         out = self.fc(out)  # => (batch, 2*H*W)
-        out = out.view(batch_size, two, H, W)  # => (batch, 2, H, W)
+        out = out.view(batch_size, real_imag, num_tran, resource_block, num_rece)  # => (batch, 2, H, W)
         return out
 
 
@@ -207,14 +209,12 @@ class TransformerModel(nn.Module):
         out_channels=4,
         H=18,
         W=16,
-        seq_len=16,
         multires=6,  # extra arg to control embedder frequency levels
     ):
         super(TransformerModel, self).__init__()
         self.out_channels = out_channels
         self.H = H
         self.W = W
-        self.seq_len = seq_len
 
         # Flattened size = out_channels * H * W
         self.input_size = out_channels * H * W
@@ -246,10 +246,11 @@ class TransformerModel(nn.Module):
         Returns:
             Tensor of shape (batch, out_channels, H, W)
         """
-        batch_size = x.size(0)
+        # batch_size = x.size(0)
+        batch_size, real_imag, num_tran, resource_block, num_rece, seq_len = x.shape
 
         # Flatten (out_channels, H, W) for each time step => (batch, seq_len, input_size)
-        x = x.permute(0, 4, 1, 2, 3).reshape(batch_size, self.seq_len, -1)
+        x = x.permute(0, 5, 1, 2, 3,4).reshape(batch_size, seq_len, -1)
 
         # Project to dim_val
         src = self.input_projection(x)  # (batch, seq_len, dim_val)
@@ -262,7 +263,7 @@ class TransformerModel(nn.Module):
         tgt = self.pos_encoder(tgt)     # also pass tgt through the same pos encoder
 
         # Build masks
-        src_mask = generate_square_subsequent_mask(self.seq_len, self.seq_len).to(x.device)
+        src_mask = generate_square_subsequent_mask(seq_len, seq_len).to(x.device)
         tgt_mask = generate_square_subsequent_mask(1, 1).to(x.device)
 
         # Pass through the Transformer
@@ -277,7 +278,7 @@ class TransformerModel(nn.Module):
         out = self.fc_out(out).squeeze(1)  # => (batch, input_size)
 
         # Reshape to (batch, out_channels, H, W)
-        out = out.view(batch_size, self.out_channels, self.H, self.W)
+        out = out.view(batch_size, real_imag, num_tran, resource_block, num_rece)
 
         return out
 

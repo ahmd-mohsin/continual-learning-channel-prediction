@@ -96,7 +96,7 @@ def train_model(model, dataloader, device, num_epochs=10, learning_rate=1e-3,
     return model
 
 
-def evaluate_model(model, dataloader, device, log_file="evaluation_log.csv"):
+def evaluate_model(model, dataloader, device):
     # criterion = CustomLoss()
     criterion = nn.MSELoss()
     # model.eval()
@@ -127,10 +127,4 @@ def evaluate_model(model, dataloader, device, log_file="evaluation_log.csv"):
 
     avg_loss = total_loss / num_batches
 
-    # Append evaluation loss to a CSV if desired
-    with open(log_file, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(["Evaluation Loss", avg_loss])
-
-    print(f"Evaluation Completed. Average Loss: {avg_loss:.4f}")
     return avg_loss

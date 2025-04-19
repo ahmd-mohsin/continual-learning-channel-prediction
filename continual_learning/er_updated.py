@@ -13,9 +13,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 from tqdm import tqdm
 
-from model import LSTMModel
+from model import *
 from dataloader import get_all_datasets
-from utils import compute_device
+from utils import compute_device, evaluate_model
 from nmse import evaluate_nmse_vs_snr
 
 # ---------------------------------------------------------------------
@@ -25,6 +25,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--sampling', type=str, default='reservoir',
                     choices=['reservoir', 'lars'],
                     help='Sampling strategy for the replay buffer')
+parser.add_argument('--model_type', type=str, default='LSTM',
+                    choices=['LSTM', 'GRU', 'TRANS'],
+                    help='MODEL_TYPE: LSTM')
+
+
 parser.add_argument('--run_name', type=str, default='er',
                     help='Name tag for output CSV file')
 parser.add_argument('--use_distill', action='store_true',
@@ -37,13 +42,46 @@ args = parser.parse_args()
 # Hyperparameters & globals
 # ---------------------------------------------------------------------
 snr_list        = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
-batch_size      = 8
+batch_size      = 64
 num_epochs      = 30
 memory_capacity = 5000
 
 device   = compute_device()
-model_er = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1,
-                     n_layers=3, H=16, W=18).to(device)
+# model_er = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1,
+                    #  n_layers=3, H=16, W=18).to(device)
+
+if args.model_type == "GRU":
+    model_er = GRUModel(
+        input_dim=1,      # not strictly used—since we flatten to 2*H*W
+        hidden_dim=32,
+        output_dim=1,
+        n_layers=3,
+        H=16,
+        W=18
+    ).to(device)
+
+elif args.model_type == "LSTM":
+    model_er = LSTMModel(
+        input_dim=1,
+        hidden_dim=32,
+        output_dim=1,
+        n_layers=3,
+        H=16,
+        W=18
+    ).to(device)
+
+elif args.model_type == "TRANS":
+    model_er = TransformerModel(
+            dim_val=128,
+            n_heads=4,
+            n_encoder_layers=1,
+            n_decoder_layers=1,
+            out_channels=2,  # Because dataloader outputs (4,18,2)
+            H=16,
+            W=18,
+        ).to(device)
+    
+
 optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-5)
 criterion = nn.MSELoss(reduction='none')
 
@@ -57,6 +95,7 @@ memory_loss:    List[float]        = []
 seen_examples   = 0
 
 def lars_pick_victim() -> int:
+    global memory_loss
     losses = torch.tensor(memory_loss, dtype=torch.float)
     inv    = 1.0 / (losses + 1e-8)
     probs  = inv / inv.sum()
@@ -64,7 +103,7 @@ def lars_pick_victim() -> int:
 
 def reservoir_add(x, y, teacher_pred, loss_val):
     """Insert into replay buffer via reservoir or LARS."""
-    global seen_examples
+    global seen_examples, memory_x, memory_y, memory_teacher, memory_loss
     seen_examples += 1
 
     if len(memory_x) < memory_capacity:
@@ -223,6 +262,31 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------
     # Evaluation
     # -----------------------------------------------------------------
+    print("\n=== Loss Evaluation ===")
+    if args.use_distill:
+        test_loss_csv_path = f"{args.sampling}_{args.model_type}_distill_loss_results.csv"
+    else:
+        test_loss_csv_path = f"{args.sampling}_{args.model_type}_loss_results.csv"
+    loss_results = {
+        'S1_Compact_loss': evaluate_model(model_er, test_loader_S1, device),
+        'S2_Dense_loss': evaluate_model(model_er, test_loader_S2, device),
+        'S3_Standard_loss': evaluate_model(model_er, test_loader_S3, device),
+    }
+
+    # Prepare the data for CSV
+    csv_rows = [['Task', 'Loss']]
+    for task, loss in loss_results.items():
+        print(f"Task {task} → Loss {loss}")
+        csv_rows.append([task, loss])
+
+    # Write to CSV file
+    with open(test_loss_csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerows(csv_rows)
+    print(f"Loss results saved to {test_loss_csv_path}")
+
+
+
     print("\n=== NMSE Evaluation ===")
     nmse_results = {
         'S1_Compact': evaluate_nmse_vs_snr(model_er, test_loader_S1, device, snr_list),
@@ -237,9 +301,9 @@ if __name__ == "__main__":
             csv_rows.append([task, snr, f"{nmse}"])
 
     if args.use_distill:
-        csv_path = f"{args.sampling}_distill_nmse_results.csv"
+        csv_path = f"{args.sampling}_{args.model_type}_distill_nmse_results.csv"
     else:
-        csv_path = f"{args.sampling}_nmse_results.csv"
+        csv_path = f"{args.sampling}_{args.model_type}_nmse_results.csv"
     with open(csv_path, 'w', newline='') as f:
         csv.writer(f).writerows(csv_rows)
 
