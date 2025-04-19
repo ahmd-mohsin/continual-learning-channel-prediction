@@ -274,3 +274,22 @@ Map those losses back to the original indices and overwrite `memory_loss[idx]` s
 
 Drop‑in these snippets and your buffer now behaves like reservoir sampling by default and switches to LARS whenever `lars_pick_victim()` replaces the random index selection. This gives you the strong baseline reported in the ER+T ablations (LARS adds the final boost after BRS) citeturn1file14.
 -----
+
+
+
+
+
+
+
+-----
+Paper part for Experience Replay (add table)
+
+1. Experience Replay Simple
+2. Experience replay with reservior
+2. Excperience replay with rservior with LARS  
+
+
+Appendix
+1. For the appendix I need to tune hyperparamter settings to achieve good resulsts (ask what the hyper paramters are?)
+2. 
+-----
