@@ -38,8 +38,8 @@ args = parser.parse_args()
 # ---------------------------------------------------------------------
 snr_list        = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
 batch_size      = 8
-num_epochs      = 10
-memory_capacity = 1000
+num_epochs      = 30
+memory_capacity = 5000
 
 device   = compute_device()
 model_er = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1,
@@ -225,9 +225,9 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------
     print("\n=== NMSE Evaluation ===")
     nmse_results = {
-        'S1': evaluate_nmse_vs_snr(model_er, test_loader_S1, device, snr_list),
-        'S2': evaluate_nmse_vs_snr(model_er, test_loader_S2, device, snr_list),
-        'S3': evaluate_nmse_vs_snr(model_er, test_loader_S3, device, snr_list),
+        'S1_Compact': evaluate_nmse_vs_snr(model_er, test_loader_S1, device, snr_list),
+        'S2_Dense': evaluate_nmse_vs_snr(model_er, test_loader_S2, device, snr_list),
+        'S3_Standard': evaluate_nmse_vs_snr(model_er, test_loader_S3, device, snr_list),
     }
 
     csv_rows = [['Task', 'SNR', 'NMSE']]
