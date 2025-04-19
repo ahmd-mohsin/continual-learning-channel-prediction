@@ -176,17 +176,17 @@ class LSTMModel(nn.Module):
 
     def forward(self, x):
         # x shape: (batch, 2, H, W, seq_len)
-        batch_size, two, H, W, seq_len = x.shape
+        batch_size, real_imag, num_tran, resource_block, num_rece, seq_len = x.shape
 
         # Flatten the matrix for each time step
-        x = x.permute(0, 4, 1, 2, 3)  # => (batch, seq_len, 2, H, W)
-        x = x.reshape(batch_size, seq_len, two * H * W)
+        x = x.permute(0, 5, 1, 2, 3, 4)  # => (batch, seq_len, 2, H, W)
+        x = x.reshape(batch_size, seq_len, real_imag *  num_tran *  resource_block *  num_rece)
 
         # Pass through LSTM
         out, _ = self.lstm(x)  # (batch, seq_len, hidden_dim)
         out = out[:, -1, :]    # (batch, hidden_dim)
         out = self.fc(out)     # (batch, 2*H*W)
-        out = out.view(batch_size, two, H, W)
+        out = out.view(batch_size, real_imag, num_tran, resource_block, num_rece)
         return out
 
 

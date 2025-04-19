@@ -43,7 +43,7 @@ memory_capacity = 1000
 
 device   = compute_device()
 model_er = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1,
-                     n_layers=3, H=36, W=64).to(device)
+                     n_layers=3, H=16, W=18).to(device)
 optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-5)
 criterion = nn.MSELoss(reduction='none')
 
@@ -146,14 +146,20 @@ def build_loader(task_ds):
 def train_epoch(loader):
     model_er.train()
     total_loss = 0.0
-
+    en_idx = 0
     for X, Y, Y_teacher, is_rep in tqdm(loader):
         X, Y, Y_teacher, is_rep = (X.to(device), Y.to(device),
                                    Y_teacher.to(device),
                                    is_rep.to(device))
 
+        # if en_idx > 5:
+        #     break
+        # en_idx += 1
+
+
         optimizer.zero_grad()
         y_pred       = model_er(X)
+        # print(f"X: {X.shape} , y_pred: {y_pred.shape}, Y: {Y.shape}, Y_teacher: {Y_teacher.shape}")
         teacher_pred = y_pred.detach().clone()
 
         # supervised loss
