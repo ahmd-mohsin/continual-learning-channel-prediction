@@ -293,3 +293,10 @@ Appendix
 1. For the appendix I need to tune hyperparamter settings to achieve good resulsts (ask what the hyper paramters are?)
 2. 
 -----
+
+
+
+
+
+
+===============================================================================================================================================================================================
