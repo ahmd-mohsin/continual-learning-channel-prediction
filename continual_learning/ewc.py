@@ -1,3 +1,49 @@
+import argparse
+import random
+import os
+import sys
+import csv
+from typing import List
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset, Dataset
+from tqdm import tqdm
+
+from model import *
+from dataloader import get_all_datasets
+from utils import compute_device, evaluate_model
+from nmse import evaluate_nmse_vs_snr
+
+
+
+device = compute_device()
+snr_list = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
+batch_size = 16
+
+print("Loading datasets...")
+data_dir = "../dataset/outputs/"
+train_S1, test_S1, train_S2, test_S2, train_S3, test_S3, \
+train_loader_S1, test_loader_S1, train_loader_S2, test_loader_S2, \
+train_loader_S3, test_loader_S3 = get_all_datasets(data_dir, batch_size=batch_size, dataset_id="all")
+print("Loaded datasets successfully.")
+
+
+# ---------------------------------------------------------------------
+# CLI arguments
+# ---------------------------------------------------------------------
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_type', type=str, default='LSTM',
+                    choices=['LSTM', 'GRU', 'TRANS'],
+                    help='MODEL_TYPE: LSTM')
+
+
+parser.add_argument('--sampling', type=str, default='ewc',
+                    choices=['ewc'],
+                    help='Strategy')
+args = parser.parse_args()
+
+
 class EWC:
     """Elastic Weight Consolidation helper to store Fisher information and original parameters."""
     def __init__(self, model: nn.Module, data_loader: DataLoader, device: torch.device, sample_size=None):
@@ -16,11 +62,11 @@ class EWC:
         self.fisher_diag = {name: torch.zeros_like(p, device=device) for name, p in model.named_parameters()}
         
         # Set model to evaluation mode and compute Fisher information
-        model.eval()
+        # model.eval()
         criterion = nn.MSELoss(reduction='mean')  # use MSE as proxy loss
         total_samples = len(data_loader.dataset) if sample_size is None else sample_size
         count = 0
-        for X_batch, Y_batch in data_loader:
+        for X_batch, Y_batch in tqdm(data_loader, desc="Computing Fisher information"):
             # Limit the number of samples if sample_size is specified
             if sample_size is not None and count >= sample_size:
                 break
@@ -57,17 +103,55 @@ class EWC:
                 penalty += torch.sum(self.fisher_diag[name] * (diff ** 2))
         return penalty
 
+
+if args.model_type == "GRU":
+    model_ewc = GRUModel(
+        input_dim=1,      # not strictly used—since we flatten to 2*H*W
+        hidden_dim=32,
+        output_dim=1,
+        n_layers=3,
+        H=16,
+        W=18
+    ).to(device)
+
+elif args.model_type == "LSTM":
+    model_ewc = LSTMModel(
+        input_dim=1,
+        hidden_dim=32,
+        output_dim=1,
+        n_layers=3,
+        H=16,
+        W=18
+    ).to(device)
+
+elif args.model_type == "TRANS":
+    model_ewc = TransformerModel(
+            dim_val=128,
+            n_heads=4,
+            n_encoder_layers=1,
+            n_decoder_layers=1,
+            out_channels=2,  # Because dataloader outputs (4,18,2)
+            H=16,
+            W=18,
+        ).to(device)
+
+
 # Training the model sequentially on S1 -> S2 -> S3 using EWC
-model_ewc = LSTMModel().to(device)
-optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-3)
+# model_ewc = LSTMModel().to(device)
+optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
 criterion = nn.MSELoss()
 
-num_epochs = 10  # epochs per task (adjust as needed)
+num_epochs = 30  # epochs per task (adjust as needed)
 ewc_lambda = 0.4  # regularization strength for EWC (tunable hyperparameter)
 
 # Train on Task 1 (S1) normally
+print("Train on Task 1 (S1) normally")
 for epoch in range(num_epochs):
-    for X_batch, Y_batch in train_loader_S1:
+    en_idx = 0
+    for X_batch, Y_batch in tqdm(train_loader_S1, desc="Training S1"):
+        en_idx += 1
+        # if en_idx > 10:
+        #     break
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
         optimizer.zero_grad()
@@ -81,10 +165,16 @@ for epoch in range(num_epochs):
 ewc_S1 = EWC(model_ewc, train_loader_S1, device=device)
 
 # Train on Task 2 (S2) with EWC regularization
+print("Train on Task 2 (S2) with EWC regularization")
 # We reinitialize optimizer for a new task to avoid carrying momentum from previous task
-optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
 for epoch in range(num_epochs):
-    for X_batch, Y_batch in train_loader_S2:
+    en_idx = 0
+
+    for X_batch, Y_batch in tqdm(train_loader_S2,  desc="Training S2"):
+        en_idx += 1
+        # if en_idx > 10:
+        #     break
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
         optimizer.zero_grad()
@@ -103,9 +193,14 @@ ewc_S2 = EWC(model_ewc, train_loader_S2, device=device)
 # (Alternatively, create a single EWC object that stores multiple tasks)
 
 # Train on Task 3 (S3) with EWC regularization (Tasks 1 & 2 penalties)
-optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-3)
+print("Train on Task 3 (S3) with EWC regularization (Tasks 1 & 2 penalties)")
+optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
 for epoch in range(num_epochs):
-    for X_batch, Y_batch in train_loader_S3:
+    en_idx = 0
+    for X_batch, Y_batch in tqdm(train_loader_S3, desc="Training S3)"):
+        en_idx += 1
+        # if en_idx > 10:
+        #     break
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
         optimizer.zero_grad()
@@ -118,12 +213,46 @@ for epoch in range(num_epochs):
         optimizer.step()
 
 # Evaluate final model on all tasks (NMSE vs SNR)
-snr_list = [0, 5, 10, 15, 20]  # example SNR values in dB
 print("EWC Method - NMSE on each task across SNRs:")
+
+
+
+
+test_loss_csv_path = f"{args.sampling}_{args.model_type}_loss_results.csv"
+
+loss_results = {
+    'S1_Compact_loss': evaluate_model(model_ewc, test_loader_S1, device),
+    'S2_Dense_loss': evaluate_model(model_ewc, test_loader_S2, device),
+    'S3_Standard_loss': evaluate_model(model_ewc, test_loader_S3, device),
+}
+
+# Prepare the data for CSV
+csv_rows = [['Task', 'Loss']]
+for task, loss in loss_results.items():
+    print(f"Task {task} → Loss {loss}")
+    csv_rows.append([task, loss])
+
+# Write to CSV file
+with open(test_loss_csv_path, 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerows(csv_rows)
+print(f"Loss results saved to {test_loss_csv_path}")
+
+
 nmse_results_ewc = {}
-nmse_results_ewc['S1'] = evaluate_nmse_vs_snr(model_ewc, test_loader_S1, device, snr_list)
-nmse_results_ewc['S2'] = evaluate_nmse_vs_snr(model_ewc, test_loader_S2, device, snr_list)
-nmse_results_ewc['S3'] = evaluate_nmse_vs_snr(model_ewc, test_loader_S3, device, snr_list)
-for task, nmse_vs_snr in nmse_results_ewc.items():
-    print(f"Task {task}: " + ", ".join([f"SNR {snr}: NMSE {nmse:.4f}" 
-                                        for snr, nmse in nmse_vs_snr.items()]))
+nmse_results_ewc['S1_Compact'] = evaluate_nmse_vs_snr(model_ewc, test_loader_S1, device, snr_list)
+nmse_results_ewc['S2_Dense'] = evaluate_nmse_vs_snr(model_ewc, test_loader_S2, device, snr_list)
+nmse_results_ewc['S3_Standard'] = evaluate_nmse_vs_snr(model_ewc, test_loader_S3, device, snr_list)
+
+
+csv_rows = [['Task', 'SNR', 'NMSE']]
+for task, res in nmse_results_ewc.items():
+    for snr, nmse in res.items():
+        print(f"Task {task} | SNR {snr:2d} → NMSE {nmse}")
+        csv_rows.append([task, snr, f"{nmse}"])
+
+csv_path = f"{args.sampling}_{args.model_type}_nmse_results.csv"
+with open(csv_path, 'w', newline='') as f:
+    csv.writer(f).writerows(csv_rows)
+
+print(f"\nResults saved to {csv_path}")
