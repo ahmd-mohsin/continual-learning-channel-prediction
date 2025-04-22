@@ -109,7 +109,7 @@ def main():
     val_size = len(full_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
     
-    batch_size = 64
+    batch_size = 16384
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     
@@ -167,7 +167,7 @@ def main():
         val_size = len(test_dataset) - train_size
         _, test_dataset = torch.utils.data.random_split(test_dataset, [train_size, val_size])
 
-        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False, drop_last=True)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
         # Load model checkpoint
         output_dir = os.path.basename(args.file_path)
@@ -187,7 +187,6 @@ def main():
     val_size = len(full_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
 
-    batch_size = 16
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
