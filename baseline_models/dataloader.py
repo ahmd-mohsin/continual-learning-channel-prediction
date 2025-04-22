@@ -83,6 +83,9 @@ class ChannelSequenceDataset(Dataset):
         # self.imag_min = np.min(self.data.imag)
         # self.imag_max = np.max(self.data.imag)
 
+        print("###############################")
+        print(self.data.shape)
+        print("###############################")
 
     def __len__(self):
         return self.num_users * (self.time_length - (self.overlapping_index + 1))
@@ -134,27 +137,34 @@ class ChannelSequenceDataset(Dataset):
         real_output = torch.tensor(real_output, dtype=torch.float32, device=self.device)
         imag_output = torch.tensor(imag_output, dtype=torch.float32, device=self.device)
 
-        input_data = torch.cat([real_input, imag_input], dim=0)
-        output_data = torch.cat([real_output, imag_output], dim=0)
+        input_data = torch.stack([real_input, imag_input], dim=0)
+        output_data = torch.stack([real_output, imag_output], dim=0)
+        # input_data = torch.cat([real_input, imag_input], dim=0)
+        # output_data = torch.cat([real_output, imag_output], dim=0)
+        # print("real_input shape", real_input.shape)
         # Get the second last dimension
-        # print("input_data shape", input_data.shape)
+        # print("------------------------------------------")
+        # print("input_data shape", output_data.shape)
+        # print("------------------------------------------")
         
-        # for input
-        current_size = input_data.shape[2]
-        if current_size < 16:
-            pad_amount = 16 - current_size
-            # Padding format: (last_dim_left, last_dim_right, ..., dim3_left, dim3_right)
-            # Pad dim=3 (the 4th dimension), on the right
-            pad = [0, 0, 0, pad_amount]  # pad dim=3 only
-            pad = [0, 0] * (input_data.dim() - 4) + pad
-            input_data = F.pad(input_data, pad)
+        # ----------------------------------------------------------------
+        # # for input
+        # current_size = input_data.shape[2]
+        # if current_size < 16:
+        #     pad_amount = 16 - current_size
+        #     # Padding format: (last_dim_left, last_dim_right, ..., dim3_left, dim3_right)
+        #     # Pad dim=3 (the 4th dimension), on the right
+        #     pad = [0, 0, 0, pad_amount]  # pad dim=3 only
+        #     pad = [0, 0] * (input_data.dim() - 4) + pad
+        #     input_data = F.pad(input_data, pad)
         
         
-        # for output
-        if output_data.shape[-1] < 16:
-            pad_amount = 16 - output_data.shape[-1]
-            # Padding format for 3D: (last_dim_left, last_dim_right)
-            output_data = F.pad(output_data, (0, pad_amount))  # pad only on the right side of last dimension
+        # # for output
+        # if output_data.shape[-1] < 16:
+        #     pad_amount = 16 - output_data.shape[-1]
+        #     # Padding format for 3D: (last_dim_left, last_dim_right)
+        #     output_data = F.pad(output_data, (0, pad_amount))  # pad only on the right side of last dimension
+        # ----------------------------------------------------------------
 
                 
         return input_data, output_data

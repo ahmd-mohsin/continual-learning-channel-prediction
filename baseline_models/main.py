@@ -109,7 +109,7 @@ def main():
     val_size = len(full_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
     
-    batch_size = 16
+    batch_size = 64
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     
@@ -119,31 +119,14 @@ def main():
     # Instantiate the desired model. Adjust dimensions as needed:
     # (Below we assume your channel has size H=18, W=8, and input seq_len=16, etc.)
     # ----------------------------------------------------------------------------
-    if args.model_type == "MLP":
-        model = MLPModel(
-            input_dim=16 * 2 * 18 * 8,  # example if your seq_len=16, 2 for real+imag, H=18, W=8
-            hidden_dim=128,
-            H=18,
-            W=8
-        ).to(device)
-
-    elif args.model_type == "CNN":
-        model = CNNModel(
-            in_channels=2,    # "2" used per time-slice, though we group seq_len inside
-            H=18,
-            W=8,
-            seq_len=16,       # adjust if your overlapping_index=16
-            hidden_channels=32
-        ).to(device)
-
-    elif args.model_type == "GRU":
+    if args.model_type == "GRU":
         model = GRUModel(
             input_dim=1,      # not strictly used—since we flatten to 2*H*W
             hidden_dim=32,
             output_dim=1,
             n_layers=3,
             H=16,
-            W=36
+            W=18
         ).to(device)
 
     elif args.model_type == "LSTM":
@@ -153,7 +136,7 @@ def main():
             output_dim=1,
             n_layers=3,
             H=16,
-            W=36
+            W=18
         ).to(device)
 
     elif args.model_type == "TRANS":
@@ -162,11 +145,11 @@ def main():
                 n_heads=4,
                 n_encoder_layers=1,
                 n_decoder_layers=1,
-                out_channels=4,  # Because dataloader outputs (4,18,2)
-                H=18,
-                W=16,
-                seq_len=16
+                out_channels=2,  # Because dataloader outputs (4,18,2)
+                H=16,
+                W=18,
             ).to(device)
+
    
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Using {args.model_type} model. Total parameters: {total_params}")
