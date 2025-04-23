@@ -31,7 +31,7 @@ parser.add_argument('--model_type', type=str, default='LSTM',
 
 
 parser.add_argument('--run_name', type=str, default='er',
-                    help='Name tag for output CSV file')
+                    help='Name tag\ for output CSV file')
 parser.add_argument('--use_distill', action='store_true',
                     help='Enable CLEAR‑style behavioral cloning on replay')
 parser.add_argument('--lambda_bc', type=float, default=1.0,
