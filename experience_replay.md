@@ -296,7 +296,35 @@ Appendix
 
 
 
+### Results obtained
+
+1. Experience Replay 
+
+-> LARS
+-> Without LARS
+-> With Reservoir
+
+----
+Distillation still missing so we have to see whether we use distillation or now0
+----
+3 Graphs in paper (Moving the distribution graph into the appendix)
+
+3 Graphs remaining
+
+1. One i will add the baseline in which it is trained on one model and tested on all three (already added)
+2. For the nexr part, one i can add regarding continual learning using experience replay. For this graph, what I can do is take the best performing model for this and plot curves for different scenarions 
+
+=====
+What curves to include?
+
+1. S1, S2, S3 with LARS
+2. S2, S2, S3 with Reservoir only (6 curves in total) LARS with reservoir should show a but of improvement | Lets see :)
+
+Okay the LSTM is perforrming the best for now so i wil be using the LSTM dataset.
 
 
+Now for the tables, I need to decide which tables to add in the main and what to add in the appendix
 
-===============================================================================================================================================================================================
+Expereince REplay table:
+
+=====
