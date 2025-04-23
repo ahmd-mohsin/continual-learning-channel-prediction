@@ -31,7 +31,7 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
         for snr_db in snr_db_list:
             total_nmse = 0.0
             total_samples = len(dataloader)
-            test_total_sample = 0
+            test_total_sample = 0.0
             # print("########################")
             # print(total_samples)
             for X_batch, Y_batch in tqdm(dataloader, desc="Evaluating NMSE for SNR_DB: " + str(snr_db)):
@@ -39,7 +39,7 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
                 X_batch = X_batch.to(device)
                 Y_batch = Y_batch.to(device)
                 if torch.sum(Y_batch**2) == 0:
-                    # print(f"Skipping batch because Y_batch sum is equal to zero.")
+                    print(f"Skipping batch because Y_batch sum is equal to zero.")
                     continue
                 # Compute the power of the input signal
                 signal_power = torch.mean(X_batch**2)
@@ -60,10 +60,13 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
                 # Multiply by batch size and sum for weighted average
                 total_nmse += batch_nmse.item()
                 test_total_sample += 1
+
                 # print(f"Batch NMSE: {batch_nmse.item():.6f}")
             # nmse_results[snr_db] = total_nmse / total_samples
+            # nmse_results[snr_db] = total_nmse / test_total_sample
+            print(f"Total NMSE: {total_nmse} / {test_total_sample}")
             nmse_results[snr_db] = total_nmse / test_total_sample
-            print(f"SNR: {snr_db} dB, NMSE: {nmse_results[snr_db]:.6f}")
+            print(f"SNR: {snr_db} dB, NMSE: {nmse_results[snr_db]}")
     return nmse_results
 
 if __name__ == "__main__":
@@ -83,8 +86,9 @@ if __name__ == "__main__":
     parser.add_argument("--test_file_path", type=str, default="../dataset/outputs/umi_compact_conf_2tx_2rx.", #  umi_standard_conf_16tx_2rx
                         help="Test file path (used only if --test_only is set)")
     
-    parser.add_argument("--batch_size", type=int, default=8192, help="Batch size for evaluation")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size for evaluation")
     args = parser.parse_args()
+    torch.manual_seed(42)
 
     device = compute_device()
 

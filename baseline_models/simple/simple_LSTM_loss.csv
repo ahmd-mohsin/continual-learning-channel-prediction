@@ -1,0 +1,10 @@
+Task,Loss
+model_Compact_test_compact,0.24325026574160272
+model_Compact_test_Dense,0.24837492159140065
+model_Compact_test_Standard,0.2564235358254413
+model_Dense_test_compact,0.23434000904701968
+model_Dense_test_Dense,0.23933497246687346
+model_Dense_test_Standard,0.2472205511637678
+model_Standard_test_compact,0.24711567451659336
+model_Standard_test_Dense,0.2522763950800834
+model_Standard_test_Standard,0.26036720603877944
