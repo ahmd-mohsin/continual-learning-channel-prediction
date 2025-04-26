@@ -14,7 +14,7 @@ from model import *
 from dataloader import get_all_datasets
 from utils import compute_device, evaluate_model
 from nmse import evaluate_nmse_vs_snr
-
+from loss import NMSELoss
 # Set device and hyperparameters
 
 device = compute_device()
@@ -55,7 +55,7 @@ else:
                              n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
 
 optimizer = torch.optim.Adam(model_lwf.parameters(), lr=1e-3)
-criterion = nn.MSELoss()
+criterion = NMSELoss()
 
 num_epochs = 30
 distill_lambda = 0.5  # weight for distillation loss

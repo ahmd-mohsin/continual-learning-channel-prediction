@@ -1,47 +1,46 @@
 import torch
 import torch.nn as nn
 
-import torch
-import torch.nn as nn
+class NMSELoss(nn.Module):
+    """
+    Normalized MSE loss.
+    - reduction='none': returns a tensor of shape (batch, *spatial_dims)
+      containing the squared error normalized by each sample's power.
+    - reduction='mean': returns a single scalar = mean(sample_nmse).
+    - reduction='sum' : returns a single scalar = sum(sample_nmse).
+    """
+    def __init__(self, eps: float = 1e-8, reduction: str = 'mean'):
+        super().__init__()
+        self.eps       = eps
+        self.reduction = reduction
 
-class CustomLoss(nn.Module):
-    def __init__(self, alpha=0.5):
-        """
-        Custom Loss combining MSE and F1 score loss
-        alpha: The weight given to MSE loss (0 <= alpha <= 1)
-        """
-        super(CustomLoss, self).__init__()
-        self.alpha = alpha
-        self.mse_loss = nn.MSELoss()
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # element‐wise squared error
+        se = (pred - target).pow(2)                                       # (B, …)
+        # element‐wise target power
+        tp = target.pow(2)                                                # (B, …)
 
-    def f1_loss(self, y_pred, y_true, epsilon=1e-6):
-        """
-        Calculate F1 loss (negative F1 score)
-        """
-        # Flatten the tensors for simplicity
-        y_pred = y_pred.view(-1)
-        y_true = y_true.view(-1)
+        # compute per‐sample MSE and power
+        B = pred.size(0)
+        se_flat = se.view(B, -1)
+        tp_flat = tp.view(B, -1)
+        mse_per_sample   = se_flat.mean(1)                                # (B,)
+        power_per_sample = tp_flat.mean(1).add(self.eps)                  # (B,)
+        nmse_per_sample  = mse_per_sample / power_per_sample              # (B,)
 
-        # Calculate Precision and Recall
-        true_positive = torch.sum(y_true * y_pred)
-        predicted_positive = torch.sum(y_pred)
-        actual_positive = torch.sum(y_true)
+        if self.reduction == 'none':
+            # we need to return element‐wise normalized error so that
+            # your existing `.view(B, -1).mean(1)` still works:
+            #   (se / power) has shape (B, …)
+            power_reshaped = power_per_sample.view([B] + [1]*(se.dim()-1))
+            return se.div(power_reshaped)                                 # (B, …)
 
-        precision = true_positive / (predicted_positive + epsilon)
-        recall = true_positive / (actual_positive + epsilon)
+        if self.reduction == 'sum':
+            return nmse_per_sample.sum()                                  # scalar
 
-        # F1 score
-        f1 = 2 * (precision * recall) / (precision + recall + epsilon)
+        # default: 'mean'
+        return nmse_per_sample.mean()                                     # scalar
 
-        # F1 loss is the negative F1 score, since we want to minimize loss
-        return 1 - f1
-
-    def forward(self, y_pred, y_true):
-        """
-        Combine MSE loss and F1 loss
-        """
-        mse = self.mse_loss(y_pred, y_true)
-        f1 = self.f1_loss(y_pred, y_true)
-        
-        # Combine both losses
-        return self.alpha * mse + (1 - self.alpha) * f1
+# Usage in your script:
+# to preserve the old pattern of getting per‐element outputs:
+criterion = NMSELoss(reduction='none')

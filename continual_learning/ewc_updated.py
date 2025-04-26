@@ -14,7 +14,7 @@ from model import *
 from dataloader import get_all_datasets
 from utils import compute_device, evaluate_model
 from nmse import evaluate_nmse_vs_snr
-
+from loss import NMSELoss
 # Set device and hyperparameters
 
 device = compute_device()
@@ -63,7 +63,7 @@ class EWC:
         
         # Set model to evaluation mode and compute Fisher information
         # model.eval()
-        criterion = nn.MSELoss(reduction='mean')  # use MSE as proxy loss
+        criterion = NMSELoss(reduction='mean')  # use MSE as proxy loss
         total_samples = len(data_loader.dataset) if sample_size is None else sample_size
         count = 0
         for X_batch, Y_batch in tqdm(data_loader, desc="Computing Fisher information"):
@@ -142,7 +142,7 @@ else:
                              n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-criterion = nn.MSELoss()
+criterion = NMSELoss()
 num_epochs = 30
 lambda_reg = 0.4
 

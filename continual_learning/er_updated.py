@@ -17,7 +17,7 @@ from model import *
 from dataloader import get_all_datasets
 from utils import compute_device, evaluate_model
 from nmse import evaluate_nmse_vs_snr
-
+from loss import NMSELoss
 # ---------------------------------------------------------------------
 # CLI arguments
 # ---------------------------------------------------------------------
@@ -81,9 +81,6 @@ elif args.model_type == "TRANS":
             W=18,
         ).to(device)
     
-
-optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-5)
-criterion = nn.MSELoss(reduction='none')
 
 # ---------------------------------------------------------------------
 # Replay buffer state
@@ -183,6 +180,8 @@ def build_loader(task_ds):
 # Single epoch training
 # ---------------------------------------------------------------------
 def train_epoch(loader):
+    optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-5)
+    criterion = NMSELoss(reduction='none')
     model_er.train()
     total_loss = 0.0
     en_idx = 0

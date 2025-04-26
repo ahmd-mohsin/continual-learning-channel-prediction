@@ -14,7 +14,7 @@ from model import *
 from dataloader import get_all_datasets
 from utils import compute_device, evaluate_model
 from nmse import evaluate_nmse_vs_snr
-
+from loss import NMSELoss
 
 
 device = compute_device()
@@ -63,7 +63,7 @@ class EWC:
         
         # Set model to evaluation mode and compute Fisher information
         # model.eval()
-        criterion = nn.MSELoss(reduction='mean')  # use MSE as proxy loss
+        criterion = NMSELoss(reduction='mean')  # use MSE as proxy loss
         total_samples = len(data_loader.dataset) if sample_size is None else sample_size
         count = 0
         for X_batch, Y_batch in tqdm(data_loader, desc="Computing Fisher information"):
@@ -139,7 +139,7 @@ elif args.model_type == "TRANS":
 # Training the model sequentially on S1 -> S2 -> S3 using EWC
 # model_ewc = LSTMModel().to(device)
 optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
-criterion = nn.MSELoss()
+criterion = NMSELoss()
 
 num_epochs = 30  # epochs per task (adjust as needed)
 ewc_lambda = 0.4  # regularization strength for EWC (tunable hyperparameter)
@@ -168,6 +168,7 @@ ewc_S1 = EWC(model_ewc, train_loader_S1, device=device)
 print("Train on Task 2 (S2) with EWC regularization")
 # We reinitialize optimizer for a new task to avoid carrying momentum from previous task
 optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
+criterion = NMSELoss()
 for epoch in range(num_epochs):
     en_idx = 0
 
@@ -195,6 +196,7 @@ ewc_S2 = EWC(model_ewc, train_loader_S2, device=device)
 # Train on Task 3 (S3) with EWC regularization (Tasks 1 & 2 penalties)
 print("Train on Task 3 (S3) with EWC regularization (Tasks 1 & 2 penalties)")
 optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
+criterion = NMSELoss()
 for epoch in range(num_epochs):
     en_idx = 0
     for X_batch, Y_batch in tqdm(train_loader_S3, desc="Training S3)"):
