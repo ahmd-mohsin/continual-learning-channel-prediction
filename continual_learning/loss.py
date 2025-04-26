@@ -40,7 +40,3 @@ class NMSELoss(nn.Module):
 
         # default: 'mean'
         return nmse_per_sample.mean()                                     # scalar
-
-# Usage in your script:
-# to preserve the old pattern of getting per‐element outputs:
-criterion = NMSELoss(reduction='none')
