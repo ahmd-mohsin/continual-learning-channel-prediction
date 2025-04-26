@@ -81,7 +81,7 @@ from torch.utils.data import DataLoader, TensorDataset, Dataset
 from tqdm import tqdm
 # Set device and hyperparameters
 from nmse import evaluate_nmse_vs_snr
-
+from loss import NMSELoss
 device = compute_device()
 snr_list = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
 batch_size = 16
@@ -122,24 +122,32 @@ def main():
                                 n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
 
     optimizer = torch.optim.Adam(model_s1.parameters(), lr=1e-5)
-    criterion = nn.MSELoss()
+    criterion = NMSELoss()
 
     num_epochs = 30
     print(f"--------------------{args.model_type}---------------------------")
     # Train on Task 1 (S1) normally (no old model yet)
     for epoch in range(num_epochs):
-        en_idx = 0
-        for X_batch, Y_batch in tqdm(train_loader_S1, desc="Training Task 1"):
-            # en_idx += 1
-            # if en_idx > 10:
-            #     break
+        running_loss = 0.0
+        num_batches  = 0
+
+        # Use a simple tqdm bar for this epoch
+        for X_batch, Y_batch in tqdm(train_loader_S1, desc=f"Epoch {epoch+1}/{num_epochs}"):
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
+
             optimizer.zero_grad()
             pred = model_s1(X_batch)
             loss = criterion(pred, Y_batch)
             loss.backward()
             optimizer.step()
+
+            running_loss += loss.item()
+            num_batches  += 1
+
+        # Compute average loss for this epoch
+        avg_loss = running_loss / num_batches
+        print(f"Epoch [{epoch+1}/{num_epochs}]  Average Loss: {avg_loss}")
 
 
     if args.model_type == 'GRU':
@@ -153,23 +161,33 @@ def main():
     
     # Train on Task 2 (S2) with LwF
     optimizer = torch.optim.Adam(model_s2.parameters(), lr=1e-5)
+    criterion = NMSELoss()
     for epoch in range(num_epochs):
-        en_idx = 0
-        for X_batch, Y_batch in tqdm(train_loader_S2, desc="Training Task 2"):
-            # en_idx += 1
-            # if en_idx > 10:
-            #     break
+        running_loss = 0.0
+        num_batches  = 0
+
+        # Use tqdm with a simple description, we'll update postfix inside
+        pbar = tqdm(train_loader_S2, desc=f"Epoch {epoch+1}/{num_epochs}")
+        for X_batch, Y_batch in pbar:
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
+
             optimizer.zero_grad()
-            # Forward pass new model
-            pred = model_s2(X_batch)
-            # Forward pass old model (with no grad)
-            # Compute losses
-            task_loss = criterion(pred, Y_batch)  # new task supervision loss
-            loss = task_loss 
-            loss.backward()
+            pred      = model_s2(X_batch)
+            task_loss = criterion(pred, Y_batch)
+            task_loss.backward()
             optimizer.step()
+
+            # accumulate for average
+            running_loss += task_loss.item()
+            num_batches  += 1
+
+            # update the progress bar with the current batch loss
+            pbar.set_postfix(loss=task_loss.item())
+
+        # compute & print average loss for this epoch
+        avg_loss = running_loss / num_batches
+        print(f"Epoch [{epoch+1}/{num_epochs}]  Average Loss: {avg_loss}")
 
     if args.model_type == 'GRU':
         model_s3 = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
@@ -183,20 +201,33 @@ def main():
 
     # Train on Task 3 (S3) with LwF
     optimizer = torch.optim.Adam(model_s3.parameters(), lr=1e-5)
+    criterion = NMSELoss()
     for epoch in range(num_epochs):
-        en_idx = 0
-        for X_batch, Y_batch in tqdm(train_loader_S3, desc="Training Task 3"):
-            # en_idx += 1
-            # if en_idx > 10:
-            #     break
+        running_loss = 0.0
+        num_batches  = 0
+
+        # Show a progress bar for this epoch
+        pbar = tqdm(train_loader_S3, desc=f"Epoch {epoch+1}/{num_epochs}")
+        for X_batch, Y_batch in pbar:
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
+
             optimizer.zero_grad()
-            pred = model_s3(X_batch)
+            pred      = model_s3(X_batch)
             task_loss = criterion(pred, Y_batch)
-            loss = task_loss 
-            loss.backward()
+            task_loss.backward()
             optimizer.step()
+
+            # accumulate for average
+            running_loss += task_loss.item()
+            num_batches  += 1
+
+            # update bar with current batch loss
+            pbar.set_postfix(loss=task_loss.item())
+
+        # end of epoch → compute & print average loss
+        avg_loss = running_loss / num_batches
+        print(f"Epoch [{epoch+1}/{num_epochs}]  Average Loss: {avg_loss}")
 
     # Evaluate final model on all tasks (NMSE vs SNR)
     # print("LwF Method - NMSE on each task across SNRs:")
