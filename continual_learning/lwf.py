@@ -19,7 +19,7 @@ from loss import NMSELoss
 
 device = compute_device()
 snr_list = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
-batch_size = 1024
+batch_size = 2046
 
 # Load datasets
 print("Loading datasets...")

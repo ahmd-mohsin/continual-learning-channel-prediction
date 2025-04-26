@@ -42,7 +42,7 @@ args = parser.parse_args()
 # Hyperparameters & globals
 # ---------------------------------------------------------------------
 snr_list        = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
-batch_size      = 64
+batch_size      = 2046
 num_epochs      = 30
 memory_capacity = 5000
 
