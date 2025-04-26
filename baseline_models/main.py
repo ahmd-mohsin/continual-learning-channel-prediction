@@ -4,8 +4,6 @@ import torch
 
 # Import the new model classes from model.py:
 from model import (
-    MLPModel,
-    CNNModel,
     GRUModel,
     LSTMModel,
     TransformerModel
@@ -13,18 +11,14 @@ from model import (
 # If you still want to use load_model for inference, you can also import it:
 # from model import load_model
 import csv
-from dataloader import ChannelSequenceDataset
-from utils import train_model, evaluate_model, compute_device
+from utils import evaluate_model, compute_device
 from dataloader import get_all_datasets
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset, Dataset
 from tqdm import tqdm
-# Set device and hyperparameters
 from nmse import evaluate_nmse_vs_snr
 from loss import NMSELoss
 device = compute_device()
 snr_list = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
-batch_size = 16
+batch_size = 2046
 
 # Load datasets
 print("Loading datasets...")
@@ -71,19 +65,24 @@ def main():
         running_loss = 0.0
         num_batches  = 0
 
+        pbar = tqdm(train_loader_S1, desc=f"S1: Epoch {epoch+1}/{num_epochs}")
         # Use a simple tqdm bar for this epoch
-        for X_batch, Y_batch in tqdm(train_loader_S1, desc=f"Epoch {epoch+1}/{num_epochs}"):
+        for X_batch, Y_batch in pbar:
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
 
             optimizer.zero_grad()
             pred = model_s1(X_batch)
-            loss = criterion(pred, Y_batch)
-            loss.backward()
+            task_loss = criterion(pred, Y_batch)
+            task_loss.backward()
             optimizer.step()
 
-            running_loss += loss.item()
+            running_loss += task_loss.detach().item()
             num_batches  += 1
+
+
+            # update the progress bar with the current batch loss
+            pbar.set_postfix(loss=task_loss.detach().item())
 
         # Compute average loss for this epoch
         avg_loss = running_loss / num_batches
@@ -107,7 +106,7 @@ def main():
         num_batches  = 0
 
         # Use tqdm with a simple description, we'll update postfix inside
-        pbar = tqdm(train_loader_S2, desc=f"Epoch {epoch+1}/{num_epochs}")
+        pbar = tqdm(train_loader_S2, desc=f"S2: Epoch {epoch+1}/{num_epochs}")
         for X_batch, Y_batch in pbar:
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
@@ -119,11 +118,11 @@ def main():
             optimizer.step()
 
             # accumulate for average
-            running_loss += task_loss.item()
+            running_loss += task_loss.detach().item()
             num_batches  += 1
 
             # update the progress bar with the current batch loss
-            pbar.set_postfix(loss=task_loss.item())
+            pbar.set_postfix(loss=task_loss.detach().item())
 
         # compute & print average loss for this epoch
         avg_loss = running_loss / num_batches
@@ -147,7 +146,7 @@ def main():
         num_batches  = 0
 
         # Show a progress bar for this epoch
-        pbar = tqdm(train_loader_S3, desc=f"Epoch {epoch+1}/{num_epochs}")
+        pbar = tqdm(train_loader_S3, desc=f"S3: Epoch {epoch+1}/{num_epochs}")
         for X_batch, Y_batch in pbar:
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
@@ -159,11 +158,11 @@ def main():
             optimizer.step()
 
             # accumulate for average
-            running_loss += task_loss.item()
+            running_loss += task_loss.detach().item()
             num_batches  += 1
 
             # update bar with current batch loss
-            pbar.set_postfix(loss=task_loss.item())
+            pbar.set_postfix(loss=task_loss.detach().item())
 
         # end of epoch → compute & print average loss
         avg_loss = running_loss / num_batches

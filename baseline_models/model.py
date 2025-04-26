@@ -3,7 +3,7 @@ import torch.nn as nn
 import math
 import torch.nn.functional as F
 from positionalembedder import get_embedder
-
+from torch.nn import Transformer
 ###############################################################################
 # Helper function for Transformer masks (like in the notebook)
 ###############################################################################
@@ -122,6 +122,9 @@ class TransformerModel(nn.Module):
 ###############################################################################
 # Positional Encoding (commonly used in Transformers)
 ###############################################################################
+###############################################################################
+# Positional Encoding (commonly used in Transformers)
+###############################################################################
 class PositionalEncoding(nn.Module):
     """
     Wraps the frequency-based embedder (from positionalembber.py)
@@ -168,4 +171,3 @@ class PositionalEncoding(nn.Module):
             encoded = self.proj(encoded)
 
         return encoded
-

@@ -7,13 +7,11 @@ from utils import compute_device
 from tqdm import tqdm
 # Import the new model classes from model.py:
 from model import (
-    MLPModel,
-    CNNModel,
     GRUModel,
     LSTMModel,
     TransformerModel
 )
-
+from loss import NMSELoss
 
 def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
     """
@@ -26,7 +24,7 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
     """
     # model.eval()
     nmse_results = {}
-    criterion = torch.nn.MSELoss()  
+    criterion = NMSELoss()  
     with torch.no_grad():
         for snr_db in snr_db_list:
             total_nmse = 0.0
@@ -53,7 +51,7 @@ def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
                 prediction = model(X_noisy)
                 # Compute NMSE per batch: (error norm squared) / (true norm squared)
                 # batch_nmse = torch.sum((prediction - Y_batch)**2) / (torch.sum(Y_batch**2))
-                batch_nmse = criterion(prediction, Y_batch) / (torch.sum(Y_batch**2))
+                batch_nmse = criterion(prediction, Y_batch)
                 # print("pred: ",torch.max(prediction), torch.min(prediction))
                 # print("y_batch: ",torch.max(Y_batch), torch.min(Y_batch))
                 # batch_nmse = criterion(prediction, Y_batch)
