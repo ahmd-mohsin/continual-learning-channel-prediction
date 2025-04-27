@@ -153,20 +153,38 @@ if args.strategy == 'ewc_si':
 
 # Task 1: S1
 print("=== Task 1: S1 ===")
-for epoch in range(num_epochs):
-    en_idx = 0 
-    for X_batch, Y_batch in tqdm(train_loader_S1, desc=f"S1 Epoch {epoch}"):
-        # en_idx += 1
-        # if en_idx > 10:
-        #     break
-        optimizer.zero_grad()
+for epoch in range(1, num_epochs + 1):
+    model.train()
+    running_loss = 0.0
+    total_batches = len(train_loader_S1)
+
+    loop = tqdm(
+        enumerate(train_loader_S1, 1),
+        total=total_batches,
+        desc=f"S1 Epoch {epoch}/{num_epochs}"
+    )
+
+    for batch_idx, (X_batch, Y_batch) in loop:
         X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
+        optimizer.zero_grad()
+
         pred = model(X_batch)
         loss = criterion(pred, Y_batch)
         loss.backward()
+
+        # SI accumulation before the optimizer step
         if si_helper:
             si_helper.accumulate(model, optimizer.param_groups[0]['lr'])
+
         optimizer.step()
+
+        # update running loss and tqdm postfix
+        running_loss += loss.item()
+        loop.set_postfix(batch_loss=f"{loss.item()}")
+
+    # epoch stats
+    avg_loss = running_loss / total_batches
+    print(f"Epoch {epoch} S1 — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
 
 # Setup continual helper
 ewc_helper = None
@@ -178,25 +196,44 @@ elif args.strategy == 'ewc_si':
 # Task 2: S2
 print("=== Task 2: S2 ===")
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-for epoch in range(num_epochs):
-    en_idx = 0 
-    for X_batch, Y_batch in tqdm(train_loader_S2, desc=f"S2 Epoch {epoch}"):
-        # en_idx += 1
-        # if en_idx > 10:
-        #     break
-        optimizer.zero_grad()
+for epoch in range(1, num_epochs + 1):
+    model.train()
+    running_loss = 0.0
+    total_batches = len(train_loader_S2)
+
+    loop = tqdm(
+        enumerate(train_loader_S2, 1),
+        total=total_batches,
+        desc=f"S2 Epoch {epoch}/{num_epochs}"
+    )
+
+    for batch_idx, (X_batch, Y_batch) in loop:
         X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
+        optimizer.zero_grad()
+
         pred = model(X_batch)
         base_loss = criterion(pred, Y_batch)
+
         if args.strategy == 'ewc':
             penalty = ewc_helper.penalty(model)
         else:
             penalty = si_helper.penalty(model)
+
         loss = base_loss + lambda_reg * penalty
         loss.backward()
-        if si_helper:
+
+        # Accumulate SI information if using SI
+        if args.strategy != 'ewc' and si_helper:
             si_helper.accumulate(model, optimizer.param_groups[0]['lr'])
+
         optimizer.step()
+
+        # update running loss & tqdm postfix
+        running_loss += loss.item()
+        loop.set_postfix(batch_loss=f"{loss.item()}")
+
+    avg_loss = running_loss / total_batches
+    print(f"Epoch {epoch} S2 — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
 
 # Update after Task 2
 ewc_helper2 = None
@@ -208,25 +245,44 @@ elif args.strategy == 'ewc_si':
 # Task 3: S3
 print("=== Task 3: S3 ===")
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-for epoch in range(num_epochs):
-    en_idx = 0 
-    for X_batch, Y_batch in tqdm(train_loader_S3, desc=f"S3 Epoch {epoch}"):
-        # en_idx += 1
-        # if en_idx > 10:
-        #     break
-        optimizer.zero_grad()
+for epoch in range(1, num_epochs + 1):
+    model.train()
+    running_loss = 0.0
+    total_batches = len(train_loader_S3)
+
+    loop = tqdm(
+        enumerate(train_loader_S3, 1),
+        total=total_batches,
+        desc=f"S3 Epoch {epoch}/{num_epochs}"
+    )
+
+    for batch_idx, (X_batch, Y_batch) in loop:
         X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
+        optimizer.zero_grad()
+
         pred = model(X_batch)
         base_loss = criterion(pred, Y_batch)
+
         if args.strategy == 'ewc':
             penalty = ewc_helper.penalty(model) + ewc_helper2.penalty(model)
         else:
             penalty = si_helper.penalty(model)
+
         loss = base_loss + lambda_reg * penalty
         loss.backward()
-        if si_helper:
+
+        # Accumulate SI information if using SI
+        if args.strategy != 'ewc' and si_helper:
             si_helper.accumulate(model, optimizer.param_groups[0]['lr'])
+
         optimizer.step()
+
+        # update running loss & tqdm postfix
+        running_loss += loss.item()
+        loop.set_postfix(batch_loss=f"{loss.item()}")
+
+    avg_loss = running_loss / total_batches
+    print(f"Epoch {epoch} S3 — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
 
 # Evaluation
 print("=== Evaluation ===")
