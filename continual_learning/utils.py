@@ -53,5 +53,5 @@ def evaluate_model(model, dataloader, device):
             total_loss += loss.item()
 
     avg_loss = total_loss / num_batches
-
+    print(f"Average loss: {avg_loss}")
     return avg_loss
