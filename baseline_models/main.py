@@ -55,10 +55,10 @@ def main():
         model_s1 = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
                                 n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
 
-    optimizer = torch.optim.Adam(model_s1.parameters(), lr=1e-5)
+    optimizer = torch.optim.Adam(model_s1.parameters(), lr=1e-3)
     criterion = NMSELoss()
 
-    num_epochs = 30
+    num_epochs = 100
     print(f"--------------------{args.model_type}---------------------------")
     # Train on Task 1 (S1) normally (no old model yet)
     for epoch in range(num_epochs):
@@ -101,7 +101,7 @@ def main():
     
     
     # Train on Task 2 (S2) with LwF
-    optimizer = torch.optim.Adam(model_s2.parameters(), lr=1e-5)
+    optimizer = torch.optim.Adam(model_s2.parameters(), lr=1e-3)
     criterion = NMSELoss()
     for epoch in range(num_epochs):
         running_loss = 0.0
@@ -141,7 +141,7 @@ def main():
     
 
     # Train on Task 3 (S3) with LwF
-    optimizer = torch.optim.Adam(model_s3.parameters(), lr=1e-5)
+    optimizer = torch.optim.Adam(model_s3.parameters(), lr=1e-3)
     criterion = NMSELoss()
     for epoch in range(num_epochs):
         running_loss = 0.0

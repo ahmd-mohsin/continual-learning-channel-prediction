@@ -141,9 +141,9 @@ else:
     model = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
                              n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 criterion = NMSELoss()
-num_epochs = 30
+num_epochs = 100
 lambda_reg = 0.4
 
 # Initialize SI if strategy is ewc_si
@@ -194,7 +194,7 @@ elif args.strategy == 'ewc_si':
 
 # Task 2: S2
 print("=== Task 2: S2 ===")
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 for epoch in range(1, num_epochs + 1):
     model.train()
     running_loss = 0.0
@@ -243,7 +243,7 @@ elif args.strategy == 'ewc_si':
 
 # Task 3: S3
 print("=== Task 3: S3 ===")
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 for epoch in range(1, num_epochs + 1):
     model.train()
     running_loss = 0.0
