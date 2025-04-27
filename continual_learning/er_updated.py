@@ -218,9 +218,9 @@ def train_epoch(loader):
         per_sample = criterion(y_pred, Y).view(y_pred.size(0), -1).mean(1)
         for i in range(X.size(0)):
             reservoir_add(
-                X[i].detach(),
-                Y[i].detach(),
-                teacher_pred[i].detach(),
+                X[i].detach().cpu(),
+                Y[i].detach().cpu(),
+                teacher_pred[i].detach().cpu(),
                 per_sample[i].item()
             )
         total_loss += loss.item()
