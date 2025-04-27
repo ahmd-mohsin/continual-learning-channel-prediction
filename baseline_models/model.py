@@ -17,8 +17,9 @@ def generate_square_subsequent_mask(dim1, dim2):
     return mask
 
 
+    
 ###############################################################################
-# 3) GRU Model (with Tanh + Dropout)
+# 3) GRU Model (with Sigmoid + Dropout)
 ###############################################################################
 class GRUModel(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
@@ -26,26 +27,25 @@ class GRUModel(nn.Module):
         super().__init__()
         self.H, self.W, self.n_layers, self.hidden_dim = H, W, n_layers, hidden_dim
         self.input_size = 2 * H * W  
-        # apply dropout between GRU layers
         self.gru = nn.GRU(self.input_size, hidden_dim, n_layers,
                           batch_first=True, dropout=dropout)
         self.fc    = nn.Linear(hidden_dim, self.input_size)
-        self.tanh  = nn.Tanh()
+        self.act   = nn.Sigmoid()
         self.drop  = nn.Dropout(dropout)
 
     def forward(self, x):
         b, r, H, W, R, seq = x.shape
-        x = x.permute(0,5,1,2,3,4).reshape(b, seq, -1)       # (b, seq, input_size)
-        out, _ = self.gru(x)                                 # (b, seq, hidden_dim)
-        out     = out[:, -1, :]                              # (b, hidden_dim)
-        out     = self.fc(out)                               # (b, input_size)
-        out     = self.tanh(out)
+        x = x.permute(0,5,1,2,3,4).reshape(b, seq, -1)  # (b, seq, input_size)
+        out, _ = self.gru(x)                            # (b, seq, hidden_dim)
+        out     = out[:, -1, :]                         # (b, hidden_dim)
+        out     = self.fc(out)                          # (b, input_size)
+        out     = self.act(out)                         # in [0,1]
         out     = self.drop(out)
-        out     = out.view(b, r, H, W, R)                    # (b, 2, H, W, R)
+        out     = out.view(b, r, H, W, R)               # (b, 2, H, W, R)
         return out
 
 ###############################################################################
-# 4) LSTM Model (with Tanh + Dropout)
+# 4) LSTM Model (with Sigmoid + Dropout)
 ###############################################################################
 class LSTMModel(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
@@ -56,7 +56,7 @@ class LSTMModel(nn.Module):
         self.lstm  = nn.LSTM(self.input_size, hidden_dim, n_layers,
                              batch_first=True, dropout=dropout)
         self.fc    = nn.Linear(hidden_dim, self.input_size)
-        self.tanh  = nn.Tanh()
+        self.act   = nn.Sigmoid()
         self.drop  = nn.Dropout(dropout)
 
     def forward(self, x):
@@ -65,13 +65,13 @@ class LSTMModel(nn.Module):
         out, _ = self.lstm(x)
         out     = out[:, -1, :]
         out     = self.fc(out)
-        out     = self.tanh(out)
+        out     = self.act(out)
         out     = self.drop(out)
         out     = out.view(b, r, H, W, R)
         return out
 
 ###############################################################################
-# 5) Transformer Model (with Tanh + Dropout)
+# 5) Transformer Model (with Sigmoid + Dropout)
 ###############################################################################
 class TransformerModel(nn.Module):
     def __init__(self, dim_val=128, n_heads=4,
@@ -92,17 +92,15 @@ class TransformerModel(nn.Module):
             dropout=dropout, batch_first=True
         )
         self.fc_out = nn.Linear(dim_val, self.input_size)
-        self.tanh   = nn.Tanh()
+        self.act    = nn.Sigmoid()
         self.drop   = nn.Dropout(dropout)
 
     def forward(self, x):
         b, r, H, W, R, seq = x.shape
-        # flatten spatial & channels
         src = x.permute(0,5,1,2,3,4).reshape(b, seq, -1)
         src = self.input_projection(src)
         src = self.pos_encoder(src)
 
-        # prepare one-step target
         tgt = torch.zeros(b, 1, self.dim_val, device=src.device)
         tgt = self.pos_encoder(tgt)
 
@@ -111,10 +109,10 @@ class TransformerModel(nn.Module):
 
         out = self.transformer(src=src, tgt=tgt,
                                src_mask=src_mask,
-                               tgt_mask=tgt_mask)      # (b,1,dim_val)
+                               tgt_mask=tgt_mask)  # (b,1,dim_val)
         out = out.squeeze(1)
         out = self.fc_out(out)
-        out = self.tanh(out)
+        out = self.act(out)     # in [0,1]
         out = self.drop(out)
         out = out.view(b, r, H, W, R)
         return out
