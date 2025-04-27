@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # Define arrays for sampling techniques and model types
 sampling_techniques=("reservoir" "lars")

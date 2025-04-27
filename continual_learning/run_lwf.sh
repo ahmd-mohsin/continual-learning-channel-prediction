@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # Define arrays for strategies and model types
 strategies=( "lwf")
