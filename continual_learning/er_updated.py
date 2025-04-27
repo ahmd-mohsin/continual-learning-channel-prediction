@@ -161,21 +161,24 @@ def build_loader(task_ds):
     # prepare replay TensorDataset if we have buffer entries
     replay_ds = None
     if len(memory_x) > 0:
-        replay_ds = TensorDataset(
-            torch.stack(memory_x),
-            torch.stack(memory_y),
-            torch.stack(memory_teacher)
-        )
-        print("Replay buffer size:", len(replay_ds))
+        # --- move replay memory to GPU only once ---
+        x_buf = torch.stack(memory_x).to(device, non_blocking=True)
+        y_buf = torch.stack(memory_y).to(device, non_blocking=True)
+        t_buf = torch.stack(memory_teacher).to(device, non_blocking=True)
+
+        replay_ds = TensorDataset(x_buf, y_buf, t_buf)
+        print(f"Replay buffer size (GPU): {len(replay_ds)}")
     else:
         print("Replay buffer is empty.")
-            
-    # wrap in DistillDataset (replay_ds may be None)
+
+    # DistillDataset merges the two sources transparently
     full_ds = DistillDataset(task_ds, replay_ds)
+    pin = (replay_ds is None)     # only pin when every sample is on CPU
     return DataLoader(full_ds,
                       batch_size=batch_size,
                       shuffle=True,
-                      drop_last=True)
+                      drop_last=True,
+                      pin_memory=False)   # faster H2D for task_ds batches
 # ---------------------------------------------------------------------
 # Single epoch training
 # ---------------------------------------------------------------------
