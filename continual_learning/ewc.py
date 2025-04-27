@@ -146,19 +146,30 @@ ewc_lambda = 0.4  # regularization strength for EWC (tunable hyperparameter)
 
 # Train on Task 1 (S1) normally
 print("Train on Task 1 (S1) normally")
-for epoch in range(num_epochs):
-    en_idx = 0
-    for X_batch, Y_batch in tqdm(train_loader_S1, desc="Training S1"):
-        en_idx += 1
-        # if en_idx > 10:
-        #     break
+for epoch in range(1, num_epochs + 1):
+    model_ewc.train()
+    running_loss = 0.0
+    total_batches = len(train_loader_S1)
+
+    loop = tqdm(enumerate(train_loader_S1, 1),
+                total=total_batches,
+                desc=f"Epoch {epoch}/{num_epochs} - Training S1")
+
+    for batch_idx, (X_batch, Y_batch) in loop:
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
+
         optimizer.zero_grad()
         pred = model_ewc(X_batch)
         loss = criterion(pred, Y_batch)
         loss.backward()
         optimizer.step()
+
+        running_loss += loss.item()
+        loop.set_postfix(batch_loss=f"{loss.item()}")
+
+    avg_loss = running_loss / total_batches
+    print(f"Epoch {epoch} S1 completed — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
     # (Optional) evaluate on S1 validation here
 
 # After Task 1, compute Fisher info on S1 for EWC
@@ -169,23 +180,40 @@ print("Train on Task 2 (S2) with EWC regularization")
 # We reinitialize optimizer for a new task to avoid carrying momentum from previous task
 optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
 criterion = NMSELoss()
-for epoch in range(num_epochs):
-    en_idx = 0
 
-    for X_batch, Y_batch in tqdm(train_loader_S2,  desc="Training S2"):
-        en_idx += 1
-        # if en_idx > 10:
-        #     break
+for epoch in range(1, num_epochs + 1):
+    model_ewc.train()
+    running_loss = 0.0
+    total_batches = len(train_loader_S2)
+
+    # Wrap the loader in tqdm
+    loop = tqdm(enumerate(train_loader_S2, 1), 
+                total=total_batches,
+                desc=f"Epoch {epoch}/{num_epochs}")
+
+    for batch_idx, (X_batch, Y_batch) in loop:
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
+
         optimizer.zero_grad()
         pred = model_ewc(X_batch)
+
         base_loss = criterion(pred, Y_batch)
-        # EWC penalty from Task 1
-        penalty = ewc_S1.penalty(model_ewc)
-        loss = base_loss + ewc_lambda * penalty
+        penalty   = ewc_S1.penalty(model_ewc)
+        loss      = base_loss + ewc_lambda * penalty
+
         loss.backward()
         optimizer.step()
+
+        # update running loss
+        running_loss += loss.item()
+
+        # display current batch loss
+        loop.set_postfix(batch_loss=f"{loss.item()}")
+
+    # compute and print epoch total/average loss
+    avg_loss = running_loss / total_batches
+    print(f"Epoch {epoch} completed — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
     # (Optional) evaluate on S1 and S2 validation here to monitor forgetting
 
 # After Task 2, compute Fisher info on S2 and combine with S1 for EWC
@@ -197,22 +225,38 @@ ewc_S2 = EWC(model_ewc, train_loader_S2, device=device)
 print("Train on Task 3 (S3) with EWC regularization (Tasks 1 & 2 penalties)")
 optimizer = torch.optim.Adam(model_ewc.parameters(), lr=1e-5)
 criterion = NMSELoss()
-for epoch in range(num_epochs):
-    en_idx = 0
-    for X_batch, Y_batch in tqdm(train_loader_S3, desc="Training S3)"):
-        en_idx += 1
-        # if en_idx > 10:
-        #     break
+
+for epoch in range(1, num_epochs + 1):
+    model_ewc.train()
+    running_loss = 0.0
+    total_batches = len(train_loader_S3)
+
+    loop = tqdm(
+        enumerate(train_loader_S3, 1),
+        total=total_batches,
+        desc=f"Epoch {epoch}/{num_epochs} - Training S3"
+    )
+
+    for batch_idx, (X_batch, Y_batch) in loop:
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
+
         optimizer.zero_grad()
         pred = model_ewc(X_batch)
+
         base_loss = criterion(pred, Y_batch)
-        # Penalty from Task 1 and Task 2 EWC
-        penalty = ewc_S1.penalty(model_ewc) + ewc_S2.penalty(model_ewc)
-        loss = base_loss + ewc_lambda * penalty
+        penalty   = ewc_S1.penalty(model_ewc) + ewc_S2.penalty(model_ewc)
+        loss      = base_loss + ewc_lambda * penalty
+
         loss.backward()
         optimizer.step()
+
+        running_loss += loss.item()
+        loop.set_postfix(batch_loss=f"{loss.item()}")
+
+    avg_loss = running_loss / total_batches
+    print(f"Epoch {epoch} S3 completed — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
+
 
 # Evaluate final model on all tasks (NMSE vs SNR)
 print("EWC Method - NMSE on each task across SNRs:")
