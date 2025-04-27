@@ -18,7 +18,7 @@ def generate_square_subsequent_mask(dim1, dim2):
 
 
 ###############################################################################
-# 3) GRU Model (with ReLU + Dropout)
+# 3) GRU Model (with Tanh + Dropout)
 ###############################################################################
 class GRUModel(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
@@ -30,7 +30,7 @@ class GRUModel(nn.Module):
         self.gru = nn.GRU(self.input_size, hidden_dim, n_layers,
                           batch_first=True, dropout=dropout)
         self.fc    = nn.Linear(hidden_dim, self.input_size)
-        self.relu  = nn.ReLU()
+        self.tanh  = nn.Tanh()
         self.drop  = nn.Dropout(dropout)
 
     def forward(self, x):
@@ -39,13 +39,13 @@ class GRUModel(nn.Module):
         out, _ = self.gru(x)                                 # (b, seq, hidden_dim)
         out     = out[:, -1, :]                              # (b, hidden_dim)
         out     = self.fc(out)                               # (b, input_size)
-        out     = self.relu(out)
+        out     = self.tanh(out)
         out     = self.drop(out)
         out     = out.view(b, r, H, W, R)                    # (b, 2, H, W, R)
         return out
 
 ###############################################################################
-# 4) LSTM Model (with ReLU + Dropout)
+# 4) LSTM Model (with Tanh + Dropout)
 ###############################################################################
 class LSTMModel(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
@@ -56,7 +56,7 @@ class LSTMModel(nn.Module):
         self.lstm  = nn.LSTM(self.input_size, hidden_dim, n_layers,
                              batch_first=True, dropout=dropout)
         self.fc    = nn.Linear(hidden_dim, self.input_size)
-        self.relu  = nn.ReLU()
+        self.tanh  = nn.Tanh()
         self.drop  = nn.Dropout(dropout)
 
     def forward(self, x):
@@ -65,13 +65,13 @@ class LSTMModel(nn.Module):
         out, _ = self.lstm(x)
         out     = out[:, -1, :]
         out     = self.fc(out)
-        out     = self.relu(out)
+        out     = self.tanh(out)
         out     = self.drop(out)
         out     = out.view(b, r, H, W, R)
         return out
 
 ###############################################################################
-# 5) Transformer Model (with ReLU + Dropout)
+# 5) Transformer Model (with Tanh + Dropout)
 ###############################################################################
 class TransformerModel(nn.Module):
     def __init__(self, dim_val=128, n_heads=4,
@@ -92,7 +92,7 @@ class TransformerModel(nn.Module):
             dropout=dropout, batch_first=True
         )
         self.fc_out = nn.Linear(dim_val, self.input_size)
-        self.relu   = nn.ReLU()
+        self.tanh   = nn.Tanh()
         self.drop   = nn.Dropout(dropout)
 
     def forward(self, x):
@@ -114,11 +114,10 @@ class TransformerModel(nn.Module):
                                tgt_mask=tgt_mask)      # (b,1,dim_val)
         out = out.squeeze(1)
         out = self.fc_out(out)
-        out = self.relu(out)
+        out = self.tanh(out)
         out = self.drop(out)
         out = out.view(b, r, H, W, R)
         return out
-
 ###############################################################################
 # Positional Encoding (commonly used in Transformers)
 ###############################################################################
