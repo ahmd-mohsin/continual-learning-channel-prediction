@@ -9,9 +9,9 @@ class ChannelSequenceDataset(Dataset):
         self.device = device
 
         # --- load complex data into a numpy array `raw` ---
-        if file_extension == ".npy":
+        if file_extension == "npy":
             raw = np.load(self.file_path, mmap_mode='r')            # shape: (U, …, T)
-        elif file_extension == ".mat":
+        elif file_extension == "mat":
             with h5py.File(self.file_path, "r") as f:
                 grp = f["channel_matrix"]
                 real = np.array(grp["real"])

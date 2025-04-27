@@ -47,12 +47,12 @@ args = parser.parse_args()
 # Training the model sequentially on S1 -> S2 -> S3 using LwF (Knowledge Distillation)
 # Model instantiation
 if args.model_type == 'GRU':
-    model_lwf = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+    model_lwf = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
 elif args.model_type == 'LSTM':
-    model_lwf = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+    model_lwf = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
 else:
     model_lwf = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
-                             n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
+                             n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
 
 optimizer = torch.optim.Adam(model_lwf.parameters(), lr=1e-3)
 criterion = NMSELoss()

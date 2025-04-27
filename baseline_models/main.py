@@ -48,12 +48,12 @@ def main():
     # Training the model sequentially on S1 -> S2 -> S3 using LwF (Knowledge Distillation)
     # Model instantiation
     if args.model_type == 'GRU':
-        model_s1 = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+        model_s1 = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
     elif args.model_type == 'LSTM':
-        model_s1 = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+        model_s1 = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
     else:
         model_s1 = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
-                                n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
+                                n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
 
     optimizer = torch.optim.Adam(model_s1.parameters(), lr=1e-5)
     criterion = NMSELoss()
@@ -70,7 +70,9 @@ def main():
         for X_batch, Y_batch in pbar:
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
-
+            # print("=========")
+            # print(X_batch.shape)
+            # print(Y_batch.shape)
             optimizer.zero_grad()
             pred = model_s1(X_batch)
             task_loss = criterion(pred, Y_batch)
@@ -90,12 +92,12 @@ def main():
 
 
     if args.model_type == 'GRU':
-        model_s2 = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+        model_s2 = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
     elif args.model_type == 'LSTM':
-        model_s2 = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+        model_s2 = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
     else:
         model_s2 = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
-                                n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
+                                n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
     
     
     # Train on Task 2 (S2) with LwF
@@ -129,12 +131,12 @@ def main():
         print(f"Epoch [{epoch+1}/{num_epochs}]  Average Loss: {avg_loss}")
 
     if args.model_type == 'GRU':
-        model_s3 = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+        model_s3 = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
     elif args.model_type == 'LSTM':
-        model_s3 = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+        model_s3 = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
     else:
         model_s3 = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
-                                n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
+                                n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
     
     
 

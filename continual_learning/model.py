@@ -21,6 +21,9 @@ def generate_square_subsequent_mask(dim1, dim2):
 ###############################################################################
 # 3) GRU Model (with Sigmoid + Dropout)
 ###############################################################################
+###############################################################################
+# 3) GRU Model (with ReLU + Dropout)
+###############################################################################
 class GRUModel(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
                  n_layers=3, H=18, W=8, dropout=0.5):
@@ -30,22 +33,22 @@ class GRUModel(nn.Module):
         self.gru = nn.GRU(self.input_size, hidden_dim, n_layers,
                           batch_first=True, dropout=dropout)
         self.fc    = nn.Linear(hidden_dim, self.input_size)
-        self.act   = nn.Sigmoid()
+        self.act   = nn.ReLU()
         self.drop  = nn.Dropout(dropout)
 
     def forward(self, x):
-        b, r, H, W, R, seq = x.shape
-        x = x.permute(0,5,1,2,3,4).reshape(b, seq, -1)  # (b, seq, input_size)
+        b, H, W, R, seq = x.shape
+        x = x.permute(0,4,1,2,3).reshape(b, seq, -1)  # (b, seq, input_size)
         out, _ = self.gru(x)                            # (b, seq, hidden_dim)
         out     = out[:, -1, :]                         # (b, hidden_dim)
         out     = self.fc(out)                          # (b, input_size)
         out     = self.act(out)                         # in [0,1]
         out     = self.drop(out)
-        out     = out.view(b, r, H, W, R)               # (b, 2, H, W, R)
+        out     = out.view(b, H, W, R)               # (b, 2, H, W, R)
         return out
 
 ###############################################################################
-# 4) LSTM Model (with Sigmoid + Dropout)
+# 4) LSTM Model (with ReLU + Dropout)
 ###############################################################################
 class LSTMModel(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
@@ -56,22 +59,22 @@ class LSTMModel(nn.Module):
         self.lstm  = nn.LSTM(self.input_size, hidden_dim, n_layers,
                              batch_first=True, dropout=dropout)
         self.fc    = nn.Linear(hidden_dim, self.input_size)
-        self.act   = nn.Sigmoid()
+        self.act   = nn.ReLU()
         self.drop  = nn.Dropout(dropout)
 
     def forward(self, x):
-        b, r, H, W, R, seq = x.shape
-        x = x.permute(0,5,1,2,3,4).reshape(b, seq, -1)
+        b, H, W, R, seq = x.shape
+        x = x.permute(0,4,1,2,3).reshape(b, seq, -1)
         out, _ = self.lstm(x)
         out     = out[:, -1, :]
         out     = self.fc(out)
         out     = self.act(out)
         out     = self.drop(out)
-        out     = out.view(b, r, H, W, R)
+        out     = out.view(b, H, W, R)
         return out
 
 ###############################################################################
-# 5) Transformer Model (with Sigmoid + Dropout)
+# 5) Transformer Model (with ReLU + Dropout)
 ###############################################################################
 class TransformerModel(nn.Module):
     def __init__(self, dim_val=128, n_heads=4,
@@ -92,12 +95,12 @@ class TransformerModel(nn.Module):
             dropout=dropout, batch_first=True
         )
         self.fc_out = nn.Linear(dim_val, self.input_size)
-        self.act    = nn.Sigmoid()
+        self.act    = nn.ReLU()
         self.drop   = nn.Dropout(dropout)
 
     def forward(self, x):
-        b, r, H, W, R, seq = x.shape
-        src = x.permute(0,5,1,2,3,4).reshape(b, seq, -1)
+        b, H, W, R, seq = x.shape
+        src = x.permute(0,4,1,2,3).reshape(b, seq, -1)
         src = self.input_projection(src)
         src = self.pos_encoder(src)
 
@@ -114,11 +117,8 @@ class TransformerModel(nn.Module):
         out = self.fc_out(out)
         out = self.act(out)     # in [0,1]
         out = self.drop(out)
-        out = out.view(b, r, H, W, R)
+        out = out.view(b, H, W, R)
         return out
-###############################################################################
-# Positional Encoding (commonly used in Transformers)
-###############################################################################
 ###############################################################################
 # Positional Encoding (commonly used in Transformers)
 ###############################################################################

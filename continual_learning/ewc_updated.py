@@ -134,12 +134,12 @@ class SI:
 
 # Model instantiation
 if args.model_type == 'GRU':
-    model = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+    model = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
 elif args.model_type == 'LSTM':
-    model = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=18).to(device)
+    model = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
 else:
     model = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
-                             n_decoder_layers=1, out_channels=2, H=16, W=18).to(device)
+                             n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
 criterion = NMSELoss()

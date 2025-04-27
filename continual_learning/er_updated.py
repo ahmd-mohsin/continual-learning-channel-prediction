@@ -57,7 +57,7 @@ if args.model_type == "GRU":
         output_dim=1,
         n_layers=3,
         H=16,
-        W=18
+        W=9
     ).to(device)
 
 elif args.model_type == "LSTM":
@@ -67,7 +67,7 @@ elif args.model_type == "LSTM":
         output_dim=1,
         n_layers=3,
         H=16,
-        W=18
+        W=9
     ).to(device)
 
 elif args.model_type == "TRANS":
@@ -78,7 +78,7 @@ elif args.model_type == "TRANS":
             n_decoder_layers=1,
             out_channels=2,  # Because dataloader outputs (4,18,2)
             H=16,
-            W=18,
+            W=9,
         ).to(device)
     
 

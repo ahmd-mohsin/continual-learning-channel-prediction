@@ -1,7 +1,7 @@
 
 # Define arrays for strategies and model types
 strategies=( "lwf")
-model_types=("TRANS" "GRU" "LSTM" )
+model_types=("LSTM" "TRANS" "GRU" )
 
 # Loop over all combinations
 for strategy in "${strategies[@]}"; do
