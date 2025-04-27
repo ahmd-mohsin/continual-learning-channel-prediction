@@ -43,7 +43,7 @@ args = parser.parse_args()
 # ---------------------------------------------------------------------
 snr_list        = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
 batch_size      = 2046
-num_epochs      = 30
+num_epochs      = 100
 memory_capacity = 5000
 
 device   = compute_device()
@@ -183,7 +183,7 @@ def build_loader(task_ds):
 # Single epoch training
 # ---------------------------------------------------------------------
 def train_epoch(loader):
-    optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-5)
+    optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-3)
     criterion = NMSELoss(reduction='none')
     model_er.train()
     total_loss = 0.0
