@@ -1,7 +1,7 @@
 
 # Define arrays for sampling techniques and model types
 sampling_techniques=("reservoir" "lars")
-model_types=("LSTM" "TRANS" "GRU" )
+model_types=("LSTM" "TRANS" "GRU")
 
 # Loop over all combinations
 for sampling in "${sampling_techniques[@]}"

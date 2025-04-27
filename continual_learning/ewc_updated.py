@@ -179,9 +179,8 @@ for epoch in range(1, num_epochs + 1):
         optimizer.step()
 
         # update running loss and tqdm postfix
-        running_loss += loss.item()
+        running_loss += loss.detach().item()
         loop.set_postfix(batch_loss=f"{loss.item()}")
-
     # epoch stats
     avg_loss = running_loss / total_batches
     print(f"Epoch {epoch} S1 — Total Loss: {running_loss} | Avg Loss: {avg_loss}")

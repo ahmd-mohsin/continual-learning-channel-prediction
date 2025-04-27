@@ -1,42 +1,39 @@
 import torch
+from torch import Tensor
 import torch.nn as nn
+from torch.nn.modules.loss import _Loss
 
-class NMSELoss(nn.Module):
+class NMSELoss(_Loss):
     """
-    Normalized MSE loss.
-    - reduction='none': returns a tensor of shape (batch, *spatial_dims)
-      containing the squared error normalized by each sample's power.
-    - reduction='mean': returns a single scalar = mean(sample_nmse).
-    - reduction='sum' : returns a single scalar = sum(sample_nmse).
+    Normalized Mean Squared Error Loss.
+
+    NMSE = (pred - target)^2 / ( E[target^2] + eps )
+
+    Args:
+        reduction (str): 'none' | 'mean' | 'sum' (default: 'mean')
+        eps (float): small constant to avoid divide-by-zero (default: 1e-8)
+
+    Shape:
+        - Input: (N, *) where * means any number of additional dimensions
+        - Target: same shape as input
     """
-    def __init__(self, eps: float = 1e-8, reduction: str = 'mean'):
-        super().__init__()
-        self.eps       = eps
-        self.reduction = reduction
+    def __init__(self, reduction: str = 'mean', eps: float = 1e-8):
+        super().__init__(reduction=reduction)
+        if reduction not in ('none', 'mean', 'sum'):
+            raise ValueError(f"reduction must be 'none', 'mean', or 'sum', got {reduction!r}")
+        self.eps = eps
 
-    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        # element‐wise squared error
-        se = (pred - target).pow(2)                                       # (B, …)
-        # element‐wise target power
-        tp = target.pow(2)                                                # (B, …)
-
-        # compute per‐sample MSE and power
-        B = pred.size(0)
-        se_flat = se.view(B, -1)
-        tp_flat = tp.view(B, -1)
-        mse_per_sample   = se_flat.mean(1)                                # (B,)
-        power_per_sample = tp_flat.mean(1).add(self.eps)                  # (B,)
-        nmse_per_sample  = mse_per_sample / power_per_sample              # (B,)
+    def forward(self, pred: Tensor, target: Tensor) -> Tensor:
+        # element-wise squared error
+        sq_err = (pred - target).pow(2)
+        # scalar: average power of target over all elements
+        power = target.pow(2).mean()
+        # normalized error
+        nmse = sq_err / (power + self.eps)
 
         if self.reduction == 'none':
-            # we need to return element‐wise normalized error so that
-            # your existing `.view(B, -1).mean(1)` still works:
-            #   (se / power) has shape (B, …)
-            power_reshaped = power_per_sample.view([B] + [1]*(se.dim()-1))
-            return se.div(power_reshaped)                                 # (B, …)
-
-        if self.reduction == 'sum':
-            return nmse_per_sample.sum()                                  # scalar
-
-        # default: 'mean'
-        return nmse_per_sample.mean()                                     # scalar
+            return nmse
+        elif self.reduction == 'sum':
+            return nmse.sum()
+        else:  # 'mean'
+            return nmse.mean()

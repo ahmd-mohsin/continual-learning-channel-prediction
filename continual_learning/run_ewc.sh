@@ -1,7 +1,8 @@
+#!/usr/bin/env bash
 
 # Define arrays for strategies and model types
 strategies=( "ewc" "ewc_si")
-model_types=("LSTM" "TRANS" "GRU" )
+model_types=("LSTM" "TRANS" "GRU")
 
 # Loop over all combinations
 for strategy in "${strategies[@]}"; do
