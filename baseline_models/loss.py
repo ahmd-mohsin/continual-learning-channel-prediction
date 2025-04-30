@@ -37,3 +37,14 @@ class NMSELoss(_Loss):
             return nmse.sum()
         else:  # 'mean'
             return nmse.mean()
+
+
+def masked_nmse(pred_mag, true_mag, true_mask, eps=1e-8):
+    """
+    NMSE computed **only** where mask==1.
+    pred_mag, true_mag, true_mask : (B,R,S,T)
+    """
+    se     = (pred_mag - true_mag).pow(2) * true_mask
+    mse    = se.sum()    / (true_mask.sum() + eps)
+    power  = (true_mag.pow(2) * true_mask).sum() / (true_mask.sum() + eps)
+    return mse / (power + eps)

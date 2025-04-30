@@ -1,62 +1,87 @@
-import time
+# utils.py  – mask-aware utilities
+# --------------------------------
 import torch
-import torch.optim as optim
-import torch.nn as nn
 from tqdm import tqdm
-import csv
-from loss import *  # If you need CustomLoss from here
-from loss import NMSELoss
+from loss import masked_nmse          # <- function from loss.py
+import torch.nn.functional as F
+
+
+# ------------------------------------------------------------------
+# device picker (unchanged)
+# ------------------------------------------------------------------
 def compute_device():
-    """
-    Determines the best available computing device (CUDA, MPS, or CPU).
-    """
     if torch.cuda.is_available():
-        device = torch.device("cuda")
         print("Using CUDA for computation")
+        return torch.device("cuda")
     elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-        print("Using MPS (Metal Performance Shaders) for computation")
-    else:
-        device = torch.device("cpu")
-        print("Using CPU for computation")
-    return device
+        print("Using MPS for computation")
+        return torch.device("mps")
+    print("Using CPU for computation")
+    return torch.device("cpu")
 
 
-def evaluate_model(model, dataloader, device, log_file="evaluation_log.csv"):
-    # criterion = CustomLoss()
-    criterion = NMSELoss()
-    # model.eval()
-    total_loss = 0.0
-    num_batches = len(dataloader)
+# ------------------------------------------------------------------
+# evaluation on a single dataloader
+# ------------------------------------------------------------------
+@torch.no_grad()
+def evaluate_model(model, dataloader, device):
+    """
+    Returns average *masked* NMSE over the dataloader.
+    Assumes each sample is
+        X : (B, 2, R, S, T, L)
+        Y : (B, 2, R, S, T)   where [0]=magnitude, [1]=mask
+    """
+    model.eval()
+    total_loss, n_batches = 0.0, 0
 
-    with torch.no_grad():
-        for batch_idx, (X_batch, Y_batch) in enumerate(tqdm(dataloader, desc="Evaluating")):
-            X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
-            # Skip if X_batch is all zeros
-            # Skip batch if X_batch or Y_batch sum to zero
-            # if torch.sum(X_batch) < 0.1:
-            #     print(f"Skipping batch {batch_idx} because X_batch sum is less than equal to zero.")
-            #     continue
-            # if torch.sum(Y_batch) < 0.1:
-            #     print(f"Skipping batch {batch_idx} because Y_batch sum is less than equal to zero.")
-            #     continue
+    for X, Y in tqdm(dataloader, desc="Evaluating"):
+        X, Y = X.to(device), Y.to(device)
+        mag_t, mask_t = Y[:, 0], Y[:, 1]          # targets
+
+        mag_p, _ = model(X)
+        total_loss += masked_nmse(mag_p, mag_t, mask_t).item()
+        n_batches += 1
+
+    avg = total_loss / max(n_batches, 1)
+    print(f"Evaluation completed – masked NMSE: {avg:.4e}")
+    return avg
 
 
-            predictions = model(X_batch)
-            loss = criterion(predictions, Y_batch)
-            
-            # print("After normalized X_batch", X_batch[0], X_batch.shape)
-            # print("After normalized Y_batch", Y_batch[0], Y_batch.shape)
-            # print("Predictions", predictions[0], predictions.shape)
-            # print("Loss", loss.item())
-            total_loss += loss.item()
+# ------------------------------------------------------------------
+# evaluate NMSE vs. SNR curve (mask-aware)
+# ------------------------------------------------------------------
+@torch.no_grad()
+def evaluate_nmse_vs_snr_masked(model, dataloader, device, snr_list):
+    """
+    Adds AWGN of given SNR (dB) and computes masked-NMSE for each SNR.
+    Returns {snr : nmse}.
+    """
+    model.eval()
+    results = {}
 
-    avg_loss = total_loss / num_batches
+    # Pre-load the whole set into RAM to avoid re-reading per SNR
+    full_X, full_Y = [], []
+    for X, Y in dataloader:
+        full_X.append(X); full_Y.append(Y)
+    full_X = torch.cat(full_X).to(device)
+    full_Y = torch.cat(full_Y).to(device)
 
-    # Append evaluation loss to a CSV if desired
-    # with open(log_file, mode='w', newline='') as file:
-    #     writer = csv.writer(file)
-    #     writer.writerow(["Evaluation Loss", avg_loss])
+    mag_true  = full_Y[:, 0]
+    mask_true = full_Y[:, 1]
 
-    print(f"Evaluation Completed. Average Loss: {avg_loss:.4f}")
-    return avg_loss
+    signal_power = (mag_true.pow(2) * mask_true).sum() / mask_true.sum()
+
+    for snr in snr_list:
+        snr_lin  = 10 ** (snr / 10)
+        noise_var = signal_power / snr_lin
+
+        noise = torch.randn_like(full_X[:, 0]) * noise_var.sqrt()
+        noisy_mag = full_X.clone()
+        noisy_mag[:, 0] += noise          # ← unsqueeze no longer needed
+
+
+        mag_pred, _ = model(noisy_mag)
+        nmse = masked_nmse(mag_pred, mag_true, mask_true).item()
+        results[snr] = nmse
+
+    return results

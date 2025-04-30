@@ -50,28 +50,50 @@ class GRUModel(nn.Module):
 ###############################################################################
 # 4) LSTM Model (with ReLU + Dropout)
 ###############################################################################
-class LSTMModel(nn.Module):
-    def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
-                 n_layers=3, H=18, W=8, dropout=0.5):
+class LSTMChannelPredictor(nn.Module):
+    """
+    Predicts next-step magnitude plus a binary mask.
+    Input  x : (B, 2, R, S, T, L)     ← magnitude & mask over L past steps
+    Output y : (mag_pred, mask_logits) each (B, R, S, T)
+    """
+
+    def __init__(self,
+                 n_rx=32, n_sub=18, n_tx=2,
+                 in_channels=2,          # mag + mask
+                 hidden_dim=256,
+                 num_layers=2,
+                 dropout=0.3):
         super().__init__()
-        self.H, self.W, self.n_layers, self.hidden_dim = H, W, n_layers, hidden_dim
-        self.input_size = 2 * H * W
-        self.lstm  = nn.LSTM(self.input_size, hidden_dim, n_layers,
-                             batch_first=True, dropout=dropout)
-        self.fc    = nn.Linear(hidden_dim, self.input_size)
-        self.act   = nn.ReLU()
-        self.drop  = nn.Dropout(dropout)
+        self.R, self.S, self.T = n_rx, n_sub, n_tx
+        self.feature_dim = in_channels * n_rx * n_sub * n_tx   # 2*32*18*2 = 2304
+
+        self.lstm = nn.LSTM(input_size=self.feature_dim,
+                            hidden_size=hidden_dim,
+                            num_layers=num_layers,
+                            batch_first=True,
+                            dropout=dropout)
+
+        # two independent heads
+        self.head_mag  = nn.Linear(hidden_dim, n_rx * n_sub * n_tx)
+        self.head_mask = nn.Linear(hidden_dim, n_rx * n_sub * n_tx)
 
     def forward(self, x):
-        b, H, W, R, seq = x.shape
-        x = x.permute(0,4,1,2,3).reshape(b, seq, -1)
-        out, _ = self.lstm(x)
-        out     = out[:, -1, :]
-        out     = self.fc(out)
-        out     = self.act(out)
-        out     = self.drop(out)
-        out     = out.view(b, H, W, R)
-        return out
+        """
+        x : (B, 2, R, S, T, L)
+        """
+        B, C, R, S, T, L = x.shape
+        assert (R, S, T) == (self.R, self.S, self.T)
+
+        # (B,L,features)
+        x = x.permute(0, 5, 1, 2, 3, 4).contiguous().view(B, L, -1)
+
+        h, _ = self.lstm(x)          # (B, L, hidden)
+        h_last = h[:, -1]            # use last time step only
+
+        mag  = self.head_mag(h_last).view(B, R, S, T)
+        mask_logits = self.head_mask(h_last).view(B, R, S, T)
+
+        return mag, mask_logits
 
 ###############################################################################
 # 5) Transformer Model (with ReLU + Dropout)
@@ -95,7 +117,7 @@ class TransformerModel(nn.Module):
             dropout=dropout, batch_first=True
         )
         self.fc_out = nn.Linear(dim_val, self.input_size)
-        self.act    = nn.ReLU()
+        self.act    = nn.LeakyReLU(negative_slope=0.01)
         self.drop   = nn.Dropout(dropout)
 
     def forward(self, x):
