@@ -4,6 +4,22 @@ import math
 import torch.nn.functional as F
 from positionalembedder import get_embedder
 from torch.nn import Transformer
+
+class BinaryStepFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        # Step at zero: values > 0 → 1, else 0
+        return (input > 0).float()
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Straight‐through estimator: pass gradients unchanged
+        return grad_output
+
+class BinaryStep(nn.Module):
+    def forward(self, x):
+        return BinaryStepFunction.apply(x)
+    
+    
 ###############################################################################
 # Helper function for Transformer masks (like in the notebook)
 ###############################################################################
@@ -52,48 +68,84 @@ class GRUModel(nn.Module):
 ###############################################################################
 class LSTMChannelPredictor(nn.Module):
     """
-    Predicts next-step magnitude plus a binary mask.
-    Input  x : (B, 2, R, S, T, L)     ← magnitude & mask over L past steps
+    Predicts next‐step magnitude plus a binary mask.
+    Input  x : (B, 2, R, S, T, L)     ← mag & mask over L past steps
     Output y : (mag_pred, mask_logits) each (B, R, S, T)
     """
-
     def __init__(self,
                  n_rx=32, n_sub=18, n_tx=2,
                  in_channels=2,          # mag + mask
-                 hidden_dim=256,
-                 num_layers=2,
+                 hidden_dim=128,
+                 num_layers=3,
                  dropout=0.3):
         super().__init__()
         self.R, self.S, self.T = n_rx, n_sub, n_tx
-        self.feature_dim = in_channels * n_rx * n_sub * n_tx   # 2*32*18*2 = 2304
+        self.feature_dim = in_channels * n_rx * n_sub * n_tx   # 2304
 
-        self.lstm = nn.LSTM(input_size=self.feature_dim,
-                            hidden_size=hidden_dim,
-                            num_layers=num_layers,
-                            batch_first=True,
-                            dropout=dropout)
+        # -- magnitude branch --
+        self.mag_lstm1 = nn.LSTM(
+            input_size=self.feature_dim,
+            hidden_size=hidden_dim*2,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=(dropout if num_layers>1 else 0)
+        )
+        self.mag_lstm2 = nn.LSTM(
+            input_size=hidden_dim*2,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=(dropout if num_layers>1 else 0)
+        )
 
-        # two independent heads
-        self.head_mag  = nn.Linear(hidden_dim, n_rx * n_sub * n_tx)
-        self.head_mask = nn.Linear(hidden_dim, n_rx * n_sub * n_tx)
+        # -- mask branch --
+        self.mask_lstm1 = nn.LSTM(
+            input_size=self.feature_dim,
+            hidden_size=hidden_dim*2,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=(dropout if num_layers>1 else 0)
+        )
+        self.mask_lstm2 = nn.LSTM(
+            input_size=hidden_dim*2,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=(dropout if num_layers>1 else 0)
+        )
+
+        # heads
+        self.head_mag = nn.Sequential(
+            nn.Linear(hidden_dim, self.R * self.S * self.T),
+            nn.Softplus()    # strictly positive
+        )
+        self.head_mask = nn.Linear(hidden_dim, self.R * self.S * self.T)
+        # (use BCEWithLogitsLoss on mask_logits)
 
     def forward(self, x):
-        """
-        x : (B, 2, R, S, T, L)
-        """
         B, C, R, S, T, L = x.shape
         assert (R, S, T) == (self.R, self.S, self.T)
 
-        # (B,L,features)
-        x = x.permute(0, 5, 1, 2, 3, 4).contiguous().view(B, L, -1)
+        # reshape to (B, L, features)
+        x = x.permute(0, 5, 1, 2, 3, 4) \
+             .contiguous() \
+             .view(B, L, -1)
 
-        h, _ = self.lstm(x)          # (B, L, hidden)
-        h_last = h[:, -1]            # use last time step only
+        # -- magnitude branch --
+        seq1, _ = self.mag_lstm1(x)       # seq1: (B, L, feature_dim*2)
+        seq2, _ = self.mag_lstm2(seq1)    # seq2: (B, L, hidden_dim)
+        h_mag = seq2[:, -1, :]            # take last time‐step
 
-        mag  = self.head_mag(h_last).view(B, R, S, T)
-        mask_logits = self.head_mask(h_last).view(B, R, S, T)
+        # -- mask branch --
+        seq3, _ = self.mask_lstm1(x)
+        seq4, _ = self.mask_lstm2(seq3)
+        h_mask = seq4[:, -1, :]
 
-        return mag, mask_logits
+        # heads & reshape
+        mag_logits  = self.head_mag(h_mag).view(B, R, S, T)
+        mask_logits = self.head_mask(h_mask).view(B, R, S, T)
+
+        return mag_logits, mask_logits
 
 ###############################################################################
 # 5) Transformer Model (with ReLU + Dropout)
