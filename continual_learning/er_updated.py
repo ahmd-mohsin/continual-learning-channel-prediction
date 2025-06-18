@@ -1,27 +1,19 @@
-#!/usr/bin/env python3
-# er.py  — Experience Replay with optional CLEAR‑style self‑distillation
+
 
 import argparse
 import random
-import os
-import sys
 import csv
 from typing import List
-
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 from tqdm import tqdm
-
 from model import *
 from dataloader import get_all_datasets
 from utils import compute_device, evaluate_nmse_vs_snr_masked
-from model      import LSTMChannelPredictor          # 2-channel LSTM (mag + mask)
-
 from loss import *
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.nn.utils import clip_grad_norm_
-import torch.nn as nn
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--sampling', type=str, default='reservoir',
@@ -49,8 +41,6 @@ SNR_LIST   = [0,5,10,12,14,16,18,20,22,24,26,28,30]
 memory_capacity = 5000
 
 device   = compute_device()
-# model_er = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1,
-                    #  n_layers=3, H=16, W=18).to(device)
 
 if args.model_type == "GRU":
     model_er = GRUModel(
@@ -154,7 +144,6 @@ def build_loader(task_ds):
     else:
         print("Replay buffer is empty.")
 
-    # DistillDataset merges the two sources transparently
     full_ds = DistillDataset(task_ds, replay_ds)
     pin = (replay_ds is None)     # only pin when every sample is on CPU
     return DataLoader(full_ds,
@@ -162,12 +151,6 @@ def build_loader(task_ds):
                       shuffle=True,
                       drop_last=True,
                       pin_memory=False)   # faster H2D for task_ds batches
-
-
-# optimizer = torch.optim.Adam(model_er.parameters(), lr=LR)
-# bce_loss  = torch.nn.BCEWithLogitsLoss(reduction='none')
-# sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
-
 
 def train_epoch(epoch, loader, optimizer=None, bce_loss=None, sched=None):
     model_er.train()
@@ -188,22 +171,17 @@ def train_epoch(epoch, loader, optimizer=None, bce_loss=None, sched=None):
         optimizer.zero_grad()
         mag_p, mask_logits = model_er(X)
 
-        # original masked NMSE
         loss_mag_per_sample   = masked_nmse_per_sample(mag_p, mag_t, mask_t)
         loss_mag_mean   = masked_nmse(mag_p, mag_t, mask_t)
         
         
-        # BCE mean loss
         loss_mask_mean = bce_loss(mask_logits, mask_t).view(mask_logits.size(0), -1).mean(1).mean()
-        # tt = bce_loss(mask_logits, mask_t) 
-        # print(tt.shape, mask_logits.shape, mask_t.shape)
-        # BCE per sample loss
+
         loss_mask_per_sample = bce_loss(mask_logits, mask_t).view(mask_logits.size(0), -1).mean(1)
         
         total_supervised_loss_mean_loss = loss_mag_mean + ALPHA * loss_mask_mean
         
         
-        # distillation loss on replay
         if args.use_distill and is_rep.any():            
             teacher_mag_mean_loss   = masked_nmse(Y_teacher_mag, mag_p, mask_logits)
             teacher_mask_mean_loss = bce_loss(Y_teacher_mask, mask_logits).view(mask_logits.size(0), -1).mean(1).mean()
@@ -231,14 +209,10 @@ def train_epoch(epoch, loader, optimizer=None, bce_loss=None, sched=None):
             bce  = loss_mask_mean.item(),
         )
         total_loss += final_mean_loss.item()
-        # print(f"  ↳ avg train-loss: {total_loss}")
     sched.step(total_loss / len(loader))
 
     return total_loss / len(loader)
 
-# ---------------------------------------------------------------------
-# Task training wrapper
-# ---------------------------------------------------------------------
 def train_on_task(train_ds, task_name):
     optimizer = torch.optim.Adam(model_er.parameters(), lr=LR)
     bce_loss  = torch.nn.BCEWithLogitsLoss(reduction='none')

@@ -1,23 +1,18 @@
 import argparse
 import random
-import os
-import sys
 import csv
-from typing import List
-
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 from tqdm import tqdm
 from torch.optim.lr_scheduler import CosineAnnealingLR
-
 from model import *
 from dataloader import get_all_datasets
 from utils import compute_device, evaluate_nmse_vs_snr_masked
 from torch.nn.utils import clip_grad_norm_
 from loss import *
-# Set device and hyperparameters
 import math
+
 device = compute_device()
 BATCH_SIZE = 2048
 SEQ_LEN    = 32
@@ -26,7 +21,6 @@ ALPHA      = 0.2         # weight for BCE mask loss
 LR         = 1e-4
 SNR_LIST   = [0,5,10,12,14,16,18,20,22,24,26,28,30]
 
-# Load datasets
 print("Loading datasets...")
 train_S1, test_S1, train_loader_S1, test_loader_S1, \
 train_S2, test_S2, train_loader_S2, test_loader_S2, \
@@ -44,7 +38,6 @@ print("Loaded datasets successfully.")
 
 
 parser = argparse.ArgumentParser()
-# CLI arguments\parser = argparse.ArgumentParser()
 parser.add_argument('--model_type', type=str, default='LSTM',
                     choices=['LSTM', 'GRU', 'TRANS'],
                     help='Model type for continual learning')
@@ -53,7 +46,7 @@ parser.add_argument('--strategy', type=str, default='ewc_si',
                     help='Continual learning strategy: ewc or ewc_si')
 args = parser.parse_args()
 
-# Elastic Weight Consolidation (EWC) helper
+
 class EWC:
     """Elastic Weight Consolidation helper to store Fisher information and original parameters."""
     def __init__(self, model: nn.Module, data_loader: DataLoader, device: torch.device, sample_size=None):
@@ -66,17 +59,11 @@ class EWC:
             sample_size: If set, limit the number of samples used to compute Fisher (for efficiency).
         """
         self.device = device
-        # Store the reference parameters (theta^* from the old task)
         self.params_snapshot = {name: p.clone().detach() for name, p in model.named_parameters()}
-        # Initialize Fisher information for each parameter to zero
         self.fisher_diag = {name: torch.zeros_like(p, device=device) for name, p in model.named_parameters()}
-        
-        # Set model to evaluation mode and compute Fisher information
-        # model.eval()
         total_samples = len(data_loader.dataset) if sample_size is None else sample_size
         count = 0
         for X_batch, Y_batch in tqdm(data_loader, desc="Computing Fisher information"):
-            # Limit the number of samples if sample_size is specified
             if sample_size is not None and count >= sample_size:
                 break
             X_batch = X_batch.to(device)
@@ -84,25 +71,19 @@ class EWC:
             
             mag_t, mask_t = Y_batch[:,0], Y_batch[:,1]
             model.zero_grad()
-            # Forward pass
             mag_p, mask_logits = model(X_batch)
-            # original masked NMSE
             loss_mag  = masked_nmse(mag_p, mag_t, mask_t)
             loss_mask = bce_loss(mask_logits, mask_t)
-            # composite loss
             loss = (
                 loss_mag
                 + ALPHA * loss_mask
             )
-            # Backward pass to compute gradients
             loss.backward()
-            # Accumulate squared gradients
             for name, p in model.named_parameters():
                 if p.grad is not None:
                     # sum of squared grad
                     self.fisher_diag[name] += (p.grad.detach() ** 2)
             count += X_batch.size(0)
-        # Average the Fisher information
         for name in self.fisher_diag:
             self.fisher_diag[name] /= float(min(total_samples, count))
         model.train()
@@ -114,15 +95,11 @@ class EWC:
         """
         penalty = 0.0
         for name, p in model.named_parameters():
-            # Fisher * (theta - theta_old)^2
             if name in self.fisher_diag:
                 diff = p - self.params_snapshot[name]
                 penalty += torch.sum(self.fisher_diag[name] * (diff ** 2))
         return penalty
 
-
-
-# Synaptic Intelligence (SI) helper
 class SI:
     def __init__(self, model: nn.Module, xi: float = 0.1):
         self.xi = xi
@@ -149,7 +126,6 @@ class SI:
             loss += (self.omega[name] * (p - self.prev_params[name])**2).sum()
         return loss
 
-# Model instantiation
 if args.model_type == 'GRU':
     model = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
 elif args.model_type == 'LSTM':
@@ -162,15 +138,10 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 lambda_reg = 0.4
 bce_loss  = torch.nn.BCEWithLogitsLoss()
 
-
-# sched     = ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
-
-# Initialize SI if strategy is ewc_si
 si_helper = None
 if args.strategy == 'ewc_si':
     si_helper = SI(model)
 
-# Task 1: S1
 print("=== Task 1: S1 ===")
 sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
 for epoch in range(1, NUM_EPOCHS + 1):
@@ -190,22 +161,18 @@ for epoch in range(1, NUM_EPOCHS + 1):
 
         optimizer.zero_grad()
         mag_p, mask_logits = model(X_batch)
-        # original masked NMSE
         loss_mag  = masked_nmse(mag_p, mag_t, mask_t)
         loss_mask = bce_loss(mask_logits, mask_t)
-        # composite loss
         base_loss = (
             loss_mag
             + ALPHA * loss_mask
         )
-        # SI accumulation before the optimizer step
         if si_helper:
             si_helper.accumulate(model, optimizer.param_groups[0]['lr'])
         clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         optimizer.step()
 
-        # update running loss and tqdm postfix
         running_loss += base_loss.detach().item()
         loop.set_postfix(
             nmse = loss_mag.item(),
@@ -246,10 +213,8 @@ for epoch in range(1, NUM_EPOCHS + 1):
 
         optimizer.zero_grad()
         mag_p, mask_logits = model(X_batch)
-        # original masked NMSE
         loss_mag  = masked_nmse(mag_p, mag_t, mask_t)
         loss_mask = bce_loss(mask_logits, mask_t)
-        # composite loss
         base_loss = (
             loss_mag
             + ALPHA * loss_mask
@@ -271,7 +236,6 @@ for epoch in range(1, NUM_EPOCHS + 1):
 
         optimizer.step()
 
-        # update running loss & tqdm postfix
         running_loss += loss.item()
         loop.set_postfix(
             nmse = loss_mag.item(),

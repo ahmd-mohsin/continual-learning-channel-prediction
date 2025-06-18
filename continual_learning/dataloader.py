@@ -2,12 +2,13 @@
 
 import os
 import random
-from typing import Tuple, Dict
-
 import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
+from typing import Tuple, Dict, List
+
+
 
 def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
     return torch.as_tensor(x, dtype=torch.float32, device=device)
@@ -15,22 +16,8 @@ def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
 def _print_range(name: str, arr: np.ndarray) -> None:
     print(f"{name}: min={arr.min():.4f}, max={arr.max():.4f}, mean={arr.mean():.4f}")
 
-"""
-dataloader.py
-Refactored with automatic power-of-10 scaling so that
-the largest magnitude is brought into [1, 10).
 
-author: <you>
-"""
 
-import os
-import random
-from typing import Tuple, Dict, List
-
-import h5py
-import numpy as np
-import torch
-from torch.utils.data import Dataset, DataLoader, random_split
 
 def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
     return torch.as_tensor(x, dtype=torch.float32, device=device)
