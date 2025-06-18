@@ -28,7 +28,6 @@ class ChannelSequenceDataset(Dataset):
         mag = np.abs(raw)                                           # now real‐valued
         mag_min, mag_max = mag.min(), mag.max()
         self.data = (mag - mag_min) / (mag_max - mag_min)           # in [0,1]
-        # self.data = mag
         self.max_value = mag_max
 
         print("Loaded data with shape:", self.data.shape)
