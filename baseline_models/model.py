@@ -198,15 +198,12 @@ class PositionalEncoding(nn.Module):
         """
         super(PositionalEncoding, self).__init__()
 
-        # Build the embedder configured to take in dimension = d_model
         self.embedder, embed_dim = get_embedder(
             multires,           # e.g. 6 or 10
             input_dims=d_model, # we treat each 'd_model' channel as an input
             include_input=True
         )
 
-        # If embedder's output dimension differs from d_model,
-        # define a linear layer to project it back to d_model
         self.need_projection = (embed_dim != d_model)
         if self.need_projection:
             self.proj = nn.Linear(embed_dim, d_model)
@@ -220,11 +217,7 @@ class PositionalEncoding(nn.Module):
             Tensor of shape (batch_size, seq_len, d_model),
             with the frequency-based positional encodings.
         """
-        # Apply the multi-frequency embedder
-        # shape after embedder: (batch, seq_len, embed_dim)
         encoded = self.embedder(x)
-
-        # If embed_dim != d_model, project back down
         if self.need_projection:
             encoded = self.proj(encoded)
 

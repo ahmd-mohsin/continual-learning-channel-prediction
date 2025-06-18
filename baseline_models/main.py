@@ -1,11 +1,10 @@
-import os, csv, argparse, torch
+import os, csv, torch
 from tqdm import tqdm
 
 from dataloader import get_all_datasets
 from model      import LSTMChannelPredictor          # 2-channel LSTM (mag + mask)
 from loss       import masked_nmse                   # masked NMSE function
 from utils      import compute_device, evaluate_nmse_vs_snr_masked
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn.utils import clip_grad_norm_
 import torch.nn as nn
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -46,9 +45,6 @@ def init_weights(m):
 model.apply(init_weights)
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 bce_loss  = torch.nn.BCEWithLogitsLoss()
-
-
-# sched     = ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
 sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
 
 # --------------- training loop (S1 only) ----------------

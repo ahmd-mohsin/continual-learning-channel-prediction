@@ -8,16 +8,12 @@ author: <you>
 
 import os
 import random
-from typing import Tuple, Dict, List
+from typing import List
 
 import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
-
-# -----------------------------------------------------------
-# helpers
-# -----------------------------------------------------------
 
 def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
     return torch.as_tensor(x, dtype=torch.float32, device=device)
@@ -25,9 +21,6 @@ def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
 def _print_range(tag: str, arr: np.ndarray):
     print(f"{tag}: min={arr.min():.4e}  max={arr.max():.4e}  mean={arr.mean():.4e}")
 
-# -----------------------------------------------------------
-# main dataset
-# -----------------------------------------------------------
 
 class ChannelSequenceDataset(Dataset):
     """
@@ -102,12 +95,7 @@ class ChannelSequenceDataset(Dataset):
 
         # stats for inverse-transform or debugging
         self.samples_per_user = self.time_len - (self.seq_len + 1)
-
-    # ---------------------------------------------------------
-    # 2-A  auto-scaling
-    # --------------------------------------------------------
     
-
     def _auto_scale(self, mag: np.ndarray) -> np.ndarray:
         """Bring max magnitude into [1,10) via power-of-10 gain."""
         if self.per_user:
@@ -132,10 +120,6 @@ class ChannelSequenceDataset(Dataset):
             return 1.0                             # all zeros → leave as is
         power = np.ceil(-np.log10(max_val))        # e.g. 7.9e-6 → +6 ⇒ 10^6
         return 10.0 ** power                       # ensures new max ∈ [1,10)
-
-    # ---------------------------------------------------------
-    # 2-B  normalisation helpers
-    # ---------------------------------------------------------
 
     def _scale_per_user(self, arr: np.ndarray) -> np.ndarray:
         out = np.empty_like(arr, dtype=np.float32)
@@ -190,10 +174,6 @@ class ChannelSequenceDataset(Dataset):
         y = np.clip(y, self.clip_db_floor, self.clip_db_ceil)
         return (y - self.clip_db_floor) / (self.clip_db_ceil - self.clip_db_floor)
 
-    # ---------------------------------------------------------
-    # 2-C  PyTorch dataset API
-    # ---------------------------------------------------------
-
     def __len__(self) -> int:
         return self.num_users * self.samples_per_user
 
@@ -212,10 +192,6 @@ class ChannelSequenceDataset(Dataset):
         out  = np.stack([mag_tgt, mask_tgt], axis=0)                    # (2,R,S,T)
 
         return _to_tensor(inp,  self.device), _to_tensor(out, self.device)
-
-# -----------------------------------------------------------
-# convenience loaders for 3 datasets
-# -----------------------------------------------------------
 
 def split_dataset(dataset: Dataset, split_ratio: float = 0.8):
     n = len(dataset)
