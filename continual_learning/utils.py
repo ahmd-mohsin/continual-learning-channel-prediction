@@ -23,35 +23,39 @@ def compute_device():
 
 
 
-def evaluate_model(model, dataloader, device):
-    # criterion = CustomLoss()
-    criterion = NMSELoss()
-    # model.eval()
-    total_loss = 0.0
-    num_batches = len(dataloader)
+@torch.no_grad()
+def evaluate_nmse_vs_snr_masked(model, dataloader, device, snr_list):
+    """
+    Adds AWGN of given SNR (dB) and computes masked-NMSE for each SNR.
+    Returns {snr : nmse}.
+    """
+    model.eval()
+    results = {}
 
-    with torch.no_grad():
-        for batch_idx, (X_batch, Y_batch) in enumerate(tqdm(dataloader, desc="Evaluating")):
-            X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
-            # Skip if X_batch is all zeros
-            # Skip batch if X_batch or Y_batch sum to zero
-            # if torch.sum(X_batch) < 0.1:
-            #     print(f"Skipping batch {batch_idx} because X_batch sum is less than equal to zero.")
-            #     continue
-            # if torch.sum(Y_batch) < 0.1:
-            #     print(f"Skipping batch {batch_idx} because Y_batch sum is less than equal to zero.")
-            #     continue
+    # Pre-load the whole set into RAM to avoid re-reading per SNR
+    full_X, full_Y = [], []
+    for X, Y in dataloader:
+        full_X.append(X); full_Y.append(Y)
+    full_X = torch.cat(full_X).to(device)
+    full_Y = torch.cat(full_Y).to(device)
+
+    mag_true  = full_Y[:, 0]
+    mask_true = full_Y[:, 1]
+
+    signal_power = (mag_true.pow(2) * mask_true).sum() / mask_true.sum()
+
+    for snr in snr_list:
+        snr_lin  = 10 ** (snr / 10)
+        noise_var = signal_power / snr_lin
+
+        noise = torch.randn_like(full_X[:, 0]) * noise_var.sqrt()
+        noisy_mag = full_X.clone()
+        noisy_mag[:, 0] += noise          # ← unsqueeze no longer needed
 
 
-            predictions = model(X_batch)
-            loss = criterion(predictions, Y_batch)
-            
-            # print("After normalized X_batch", X_batch[0], X_batch.shape)
-            # print("After normalized Y_batch", Y_batch[0], Y_batch.shape)
-            # print("Predictions", predictions[0], predictions.shape)
-            # print("Loss", loss.item())
-            total_loss += loss.item()
+        mag_pred, _ = model(noisy_mag)
+        nmse = masked_nmse(mag_pred, mag_true, mask_true).item()
+        results[snr] = nmse
+        print(f"NMSE for SNR {snr} dB: {nmse}")
 
-    avg_loss = total_loss / num_batches
-    print(f"Average loss: {avg_loss}")
-    return avg_loss
+    return results

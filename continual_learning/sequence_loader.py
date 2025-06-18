@@ -43,10 +43,6 @@ class ChannelSequenceDataset(Dataset):
         # slice out window of magnitudes
         inp = self.data[user_idx,  :, :, :, t0 : t0 + self.overlapping_index]
         out = self.data[user_idx,  :, :, :, t0 + self.overlapping_index]
-
-        # to torch tensors, add channel dim =1
-        # inp = torch.tensor(inp, dtype=torch.float32, device=self.device).unsqueeze(0)
-        # out = torch.tensor(out, dtype=torch.float32, device=self.device).unsqueeze(0)
         inp = torch.tensor(inp, dtype=torch.float32, device=self.device)
         out = torch.tensor(out, dtype=torch.float32, device=self.device)
 

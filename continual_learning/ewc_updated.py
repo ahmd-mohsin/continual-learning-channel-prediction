@@ -9,30 +9,40 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 from tqdm import tqdm
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from model import *
 from dataloader import get_all_datasets
-from utils import compute_device, evaluate_model
-from nmse import evaluate_nmse_vs_snr
-from loss import NMSELoss
+from utils import compute_device, evaluate_nmse_vs_snr_masked
+from torch.nn.utils import clip_grad_norm_
+from loss import *
 # Set device and hyperparameters
-
+import math
 device = compute_device()
-snr_list = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
-batch_size = 2046
+BATCH_SIZE = 2048
+SEQ_LEN    = 32
+NUM_EPOCHS = 100
+ALPHA      = 0.2         # weight for BCE mask loss
+LR         = 1e-4
+SNR_LIST   = [0,5,10,12,14,16,18,20,22,24,26,28,30]
 
 # Load datasets
 print("Loading datasets...")
-data_dir = "../dataset/outputs/"
-train_S1, test_S1, train_S2, test_S2, train_S3, test_S3, \
-    train_loader_S1, test_loader_S1, train_loader_S2, test_loader_S2, \
-    train_loader_S3, test_loader_S3 = get_all_datasets(data_dir, batch_size=batch_size, dataset_id="all")
+train_S1, test_S1, train_loader_S1, test_loader_S1, \
+train_S2, test_S2, train_loader_S2, test_loader_S2, \
+train_S3, test_S3, train_loader_S3, test_loader_S3 = \
+    get_all_datasets(
+        data_dir      = "../dataset/outputs/",
+        batch_size    = BATCH_SIZE,
+        dataset_id    = "all",
+        normalization = "log_min_max",
+        per_user      = True,
+        seq_len       = SEQ_LEN
+    )
 print("Loaded datasets successfully.")
 
 
-# ---------------------------------------------------------------------
-# CLI arguments
-# ---------------------------------------------------------------------
+
 parser = argparse.ArgumentParser()
 # CLI arguments\parser = argparse.ArgumentParser()
 parser.add_argument('--model_type', type=str, default='LSTM',
@@ -63,7 +73,6 @@ class EWC:
         
         # Set model to evaluation mode and compute Fisher information
         # model.eval()
-        criterion = NMSELoss(reduction='mean')  # use MSE as proxy loss
         total_samples = len(data_loader.dataset) if sample_size is None else sample_size
         count = 0
         for X_batch, Y_batch in tqdm(data_loader, desc="Computing Fisher information"):
@@ -72,11 +81,19 @@ class EWC:
                 break
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
+            
+            mag_t, mask_t = Y_batch[:,0], Y_batch[:,1]
             model.zero_grad()
             # Forward pass
-            pred = model(X_batch)
-            # Compute loss (using ground truth, i.e., empirical Fisher)
-            loss = criterion(pred, Y_batch)
+            mag_p, mask_logits = model(X_batch)
+            # original masked NMSE
+            loss_mag  = masked_nmse(mag_p, mag_t, mask_t)
+            loss_mask = bce_loss(mask_logits, mask_t)
+            # composite loss
+            loss = (
+                loss_mag
+                + ALPHA * loss_mask
+            )
             # Backward pass to compute gradients
             loss.backward()
             # Accumulate squared gradients
@@ -136,15 +153,17 @@ class SI:
 if args.model_type == 'GRU':
     model = GRUModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
 elif args.model_type == 'LSTM':
-    model = LSTMModel(input_dim=1, hidden_dim=32, output_dim=1, n_layers=3, H=16, W=9).to(device)
+    model = LSTMChannelPredictor().to(device)
 else:
     model = TransformerModel(dim_val=128, n_heads=4, n_encoder_layers=1,
                              n_decoder_layers=1, out_channels=2, H=16, W=9).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-criterion = NMSELoss()
-num_epochs = 100
 lambda_reg = 0.4
+bce_loss  = torch.nn.BCEWithLogitsLoss()
+
+
+# sched     = ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
 
 # Initialize SI if strategy is ewc_si
 si_helper = None
@@ -153,7 +172,8 @@ if args.strategy == 'ewc_si':
 
 # Task 1: S1
 print("=== Task 1: S1 ===")
-for epoch in range(1, num_epochs + 1):
+sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
+for epoch in range(1, NUM_EPOCHS + 1):
     model.train()
     running_loss = 0.0
     total_batches = len(train_loader_S1)
@@ -161,28 +181,41 @@ for epoch in range(1, num_epochs + 1):
     loop = tqdm(
         enumerate(train_loader_S1, 1),
         total=total_batches,
-        desc=f"S1 Epoch {epoch}/{num_epochs}"
+        desc=f"S1 Epoch {epoch}/{NUM_EPOCHS}"
     )
 
     for batch_idx, (X_batch, Y_batch) in loop:
         X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
+        mag_t, mask_t = Y_batch[:,0], Y_batch[:,1]
+
         optimizer.zero_grad()
-
-        pred = model(X_batch)
-        loss = criterion(pred, Y_batch)
-        loss.backward()
-
+        mag_p, mask_logits = model(X_batch)
+        # original masked NMSE
+        loss_mag  = masked_nmse(mag_p, mag_t, mask_t)
+        loss_mask = bce_loss(mask_logits, mask_t)
+        # composite loss
+        base_loss = (
+            loss_mag
+            + ALPHA * loss_mask
+        )
         # SI accumulation before the optimizer step
         if si_helper:
             si_helper.accumulate(model, optimizer.param_groups[0]['lr'])
+        clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         optimizer.step()
 
         # update running loss and tqdm postfix
-        running_loss += loss.detach().item()
-        loop.set_postfix(batch_loss=f"{loss.item()}")
+        running_loss += base_loss.detach().item()
+        loop.set_postfix(
+            nmse = loss_mag.item(),
+            bce  = loss_mask.item(),
+        )
+        # loop.set_postfix(batch_loss=f"{base_loss.item()}")
     # epoch stats
     avg_loss = running_loss / total_batches
+    sched.step(avg_loss)
+
     print(f"Epoch {epoch} S1 — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
 
 # Setup continual helper
@@ -195,7 +228,8 @@ elif args.strategy == 'ewc_si':
 # Task 2: S2
 print("=== Task 2: S2 ===")
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-for epoch in range(1, num_epochs + 1):
+sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
+for epoch in range(1, NUM_EPOCHS + 1):
     model.train()
     running_loss = 0.0
     total_batches = len(train_loader_S2)
@@ -203,15 +237,23 @@ for epoch in range(1, num_epochs + 1):
     loop = tqdm(
         enumerate(train_loader_S2, 1),
         total=total_batches,
-        desc=f"S2 Epoch {epoch}/{num_epochs}"
+        desc=f"S2 Epoch {epoch}/{NUM_EPOCHS}"
     )
 
     for batch_idx, (X_batch, Y_batch) in loop:
         X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
-        optimizer.zero_grad()
+        mag_t, mask_t = Y_batch[:,0], Y_batch[:,1]
 
-        pred = model(X_batch)
-        base_loss = criterion(pred, Y_batch)
+        optimizer.zero_grad()
+        mag_p, mask_logits = model(X_batch)
+        # original masked NMSE
+        loss_mag  = masked_nmse(mag_p, mag_t, mask_t)
+        loss_mask = bce_loss(mask_logits, mask_t)
+        # composite loss
+        base_loss = (
+            loss_mag
+            + ALPHA * loss_mask
+        )
 
         if args.strategy == 'ewc':
             penalty = ewc_helper.penalty(model)
@@ -224,14 +266,19 @@ for epoch in range(1, num_epochs + 1):
         # Accumulate SI information if using SI
         if args.strategy != 'ewc' and si_helper:
             si_helper.accumulate(model, optimizer.param_groups[0]['lr'])
+        
+        clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         optimizer.step()
 
         # update running loss & tqdm postfix
         running_loss += loss.item()
-        loop.set_postfix(batch_loss=f"{loss.item()}")
-
+        loop.set_postfix(
+            nmse = loss_mag.item(),
+            bce  = loss_mask.item(),
+        )
     avg_loss = running_loss / total_batches
+    sched.step(avg_loss)
     print(f"Epoch {epoch} S2 — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
 
 # Update after Task 2
@@ -244,7 +291,8 @@ elif args.strategy == 'ewc_si':
 # Task 3: S3
 print("=== Task 3: S3 ===")
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-for epoch in range(1, num_epochs + 1):
+sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
+for epoch in range(1, NUM_EPOCHS + 1):
     model.train()
     running_loss = 0.0
     total_batches = len(train_loader_S3)
@@ -252,16 +300,23 @@ for epoch in range(1, num_epochs + 1):
     loop = tqdm(
         enumerate(train_loader_S3, 1),
         total=total_batches,
-        desc=f"S3 Epoch {epoch}/{num_epochs}"
+        desc=f"S3 Epoch {epoch}/{NUM_EPOCHS}"
     )
 
     for batch_idx, (X_batch, Y_batch) in loop:
         X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
+        mag_t, mask_t = Y_batch[:,0], Y_batch[:,1]
+
         optimizer.zero_grad()
-
-        pred = model(X_batch)
-        base_loss = criterion(pred, Y_batch)
-
+        mag_p, mask_logits = model(X_batch)
+        # original masked NMSE
+        loss_mag  = masked_nmse(mag_p, mag_t, mask_t)
+        loss_mask = bce_loss(mask_logits, mask_t)
+        # composite loss
+        base_loss = (
+            loss_mag
+            + ALPHA * loss_mask
+        )
         if args.strategy == 'ewc':
             penalty = ewc_helper.penalty(model) + ewc_helper2.penalty(model)
         else:
@@ -273,43 +328,35 @@ for epoch in range(1, num_epochs + 1):
         # Accumulate SI information if using SI
         if args.strategy != 'ewc' and si_helper:
             si_helper.accumulate(model, optimizer.param_groups[0]['lr'])
+        clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         optimizer.step()
 
         # update running loss & tqdm postfix
         running_loss += loss.item()
-        loop.set_postfix(batch_loss=f"{loss.item()}")
+        loop.set_postfix(
+            nmse = loss_mag.item(),
+            bce  = loss_mask.item(),
+        )
 
     avg_loss = running_loss / total_batches
+    sched.step(avg_loss)
     print(f"Epoch {epoch} S3 — Total Loss: {running_loss} | Avg Loss: {avg_loss}")
 
-# Evaluation
-print("=== Evaluation ===")
-test_loss_csv = f"{args.strategy}_{args.model_type}_loss.csv"
-results = {
-    'S1_Compact': evaluate_model(model, test_loader_S1, device),
-    'S2_Dense': evaluate_model(model, test_loader_S2, device),
-    'S3_Standard': evaluate_model(model, test_loader_S3, device)
+
+print("\n=== NMSE Evaluation ===")
+nmse_results = {
+    'S1_Compact': evaluate_nmse_vs_snr_masked(model, test_loader_S1, device, SNR_LIST),
+    'S2_Dense': evaluate_nmse_vs_snr_masked(model, test_loader_S2, device, SNR_LIST),
+    'S3_Standard': evaluate_nmse_vs_snr_masked(model, test_loader_S3, device, SNR_LIST),
 }
-with open(test_loss_csv, 'w', newline='') as f:
-    writer = csv.writer(f)
-    writer.writerow(['Task', 'Loss'])
-    for t, l in results.items():
-        print(f"{t} Loss: {l}")
-        writer.writerow([t, l])
-print(f"Saved losses to {test_loss_csv}")
 
-nmse_results_ewc = {}
-nmse_results_ewc['S1_Compact'] = evaluate_nmse_vs_snr(model, test_loader_S1, device, snr_list)
-nmse_results_ewc['S2_Dense'] = evaluate_nmse_vs_snr(model, test_loader_S2, device, snr_list)
-nmse_results_ewc['S3_Standard'] = evaluate_nmse_vs_snr(model, test_loader_S3, device, snr_list)
-
-
-csv_rows = [['Task', 'SNR', 'NMSE']]
-for task, res in nmse_results_ewc.items():
+csv_rows = [['Task', 'SNR', 'NMSE Masked', 'NMSE (dB)']]
+for task, res in nmse_results.items():
     for snr, nmse in res.items():
-        print(f"Task {task} | SNR {snr:2d} → NMSE {nmse}")
-        csv_rows.append([task, snr, f"{nmse}"])
+        nmse_db = -10 * math.log10(nmse + 1e-12)  # add tiny eps in case nmse==0
+        print(f"Task {task} | SNR {snr:2d} → NMSE {nmse} | {nmse_db} dB")
+        csv_rows.append([task, snr, f"{nmse}", f"{nmse_db}"])
 
 csv_path = f"{args.strategy}_{args.model_type}_nmse_results.csv"
 with open(csv_path, 'w', newline='') as f:

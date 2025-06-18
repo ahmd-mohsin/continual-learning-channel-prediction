@@ -6,11 +6,7 @@ from dataloader import ChannelSequenceDataset
 from utils import compute_device
 from tqdm import tqdm
 # Import the new model classes from model.py:
-from model import (
-    GRUModel,
-    LSTMModel,
-    TransformerModel
-)
+from model import *
 from loss import NMSELoss
 
 def evaluate_nmse_vs_snr(model, dataloader, device, snr_db_list):
@@ -103,24 +99,9 @@ if __name__ == "__main__":
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size,
                                                   shuffle=False, drop_last=True)
 
-    if args.model_type == "MLP":
-        model = MLPModel(
-            input_dim=16 * 2 * 18 * 8,  # example if your seq_len=16, 2 for real+imag, H=18, W=8
-            hidden_dim=128,
-            H=18,
-            W=8
-        ).to(device)
 
-    elif args.model_type == "CNN":
-        model = CNNModel(
-            in_channels=2,    # "2" used per time-slice, though we group seq_len inside
-            H=18,
-            W=8,
-            seq_len=16,       # adjust if your overlapping_index=16
-            hidden_channels=32
-        ).to(device)
 
-    elif args.model_type == "GRU":
+    if args.model_type == "GRU":
         model = GRUModel(
             input_dim=1,      # not strictly used—since we flatten to 2*H*W
             hidden_dim=32,
@@ -131,7 +112,7 @@ if __name__ == "__main__":
         ).to(device)
 
     elif args.model_type == "LSTM":
-        model = LSTMModel(
+        model = LSTMChannelPredictor(
             input_dim=1,
             hidden_dim=32,
             output_dim=1,

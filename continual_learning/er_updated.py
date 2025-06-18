@@ -15,12 +15,14 @@ from tqdm import tqdm
 
 from model import *
 from dataloader import get_all_datasets
-from utils import compute_device, evaluate_model
-from nmse import evaluate_nmse_vs_snr
-from loss import NMSELoss
-# ---------------------------------------------------------------------
-# CLI arguments
-# ---------------------------------------------------------------------
+from utils import compute_device, evaluate_nmse_vs_snr_masked
+from model      import LSTMChannelPredictor          # 2-channel LSTM (mag + mask)
+
+from loss import *
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.nn.utils import clip_grad_norm_
+import torch.nn as nn
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--sampling', type=str, default='reservoir',
                     choices=['reservoir', 'lars'],
@@ -38,12 +40,12 @@ parser.add_argument('--lambda_bc', type=float, default=1.0,
                     help='Weight of behavioral‑cloning loss term')
 args = parser.parse_args()
 
-# ---------------------------------------------------------------------
-# Hyperparameters & globals
-# ---------------------------------------------------------------------
-snr_list        = [0, 5, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
-batch_size      = 2046
-num_epochs      = 100
+BATCH_SIZE = 2048
+SEQ_LEN    = 32
+NUM_EPOCHS = 30
+ALPHA      = 0.2         # weight for BCE mask loss
+LR         = 1e-4
+SNR_LIST   = [0,5,10,12,14,16,18,20,22,24,26,28,30]
 memory_capacity = 5000
 
 device   = compute_device()
@@ -61,14 +63,7 @@ if args.model_type == "GRU":
     ).to(device)
 
 elif args.model_type == "LSTM":
-    model_er = LSTMModel(
-        input_dim=1,
-        hidden_dim=32,
-        output_dim=1,
-        n_layers=3,
-        H=16,
-        W=9
-    ).to(device)
+    model_er = LSTMChannelPredictor().to(device)
 
 elif args.model_type == "TRANS":
     model_er = TransformerModel(
@@ -82,9 +77,16 @@ elif args.model_type == "TRANS":
         ).to(device)
     
 
-# ---------------------------------------------------------------------
-# Replay buffer state
-# ---------------------------------------------------------------------
+
+def init_weights(m):
+    if isinstance(m, (nn.Linear, nn.LSTM)):
+        for name, param in m.named_parameters():
+            if 'weight' in name:
+                nn.init.xavier_uniform_(param)
+            elif 'bias' in name:
+                nn.init.zeros_(param)
+model_er.apply(init_weights)
+
 memory_x:       List[torch.Tensor] = []
 memory_y:       List[torch.Tensor] = []
 memory_teacher: List[torch.Tensor] = []
@@ -98,7 +100,7 @@ def lars_pick_victim() -> int:
     probs  = inv / inv.sum()
     return torch.multinomial(probs, 1).item()
 
-def reservoir_add(x, y, teacher_pred, loss_val):
+def reservoir_add(x, y, teacher_pred , loss_val):
     """Insert into replay buffer via reservoir or LARS."""
     global seen_examples, memory_x, memory_y, memory_teacher, memory_loss
     seen_examples += 1
@@ -117,24 +119,7 @@ def reservoir_add(x, y, teacher_pred, loss_val):
         memory_y[victim]       = y
         memory_teacher[victim] = teacher_pred
         memory_loss[victim]    = loss_val
-    # if len(memory_x) < memory_capacity:
-    #     memory_x.append(x.cpu())
-    #     memory_y.append(y.cpu())
-    #     memory_teacher.append(teacher_pred.cpu())
-    #     memory_loss.append(loss_val)
-    #     return
 
-    # j = random.randint(0, seen_examples - 1)
-    # if j < memory_capacity:
-    #     victim = lars_pick_victim() if args.sampling == 'lars' else j
-    #     memory_x[victim]       = x.cpu()
-    #     memory_y[victim]       = y.cpu()
-    #     memory_teacher[victim] = teacher_pred.cpu()
-    #     memory_loss[victim]    = loss_val
-
-# ---------------------------------------------------------------------
-# Dataset wrapper for distillation
-# ---------------------------------------------------------------------
 class DistillDataset(Dataset):
     """Returns (x, y, y_teacher, is_replay flag)."""
     def __init__(self, current_ds, replay_ds=None):
@@ -151,12 +136,10 @@ class DistillDataset(Dataset):
             x, y = self.cur[idx]
             return x, y, torch.zeros_like(y), False
         else:
-            x, y, y_t = self.rep[idx - self.len_cur]
+            x, y, y_t, = self.rep[idx - self.len_cur]
             return x, y, y_t, True
 
-# ---------------------------------------------------------------------
-# DataLoader builder
-# ---------------------------------------------------------------------
+
 def build_loader(task_ds):
     # prepare replay TensorDataset if we have buffer entries
     replay_ds = None
@@ -175,58 +158,81 @@ def build_loader(task_ds):
     full_ds = DistillDataset(task_ds, replay_ds)
     pin = (replay_ds is None)     # only pin when every sample is on CPU
     return DataLoader(full_ds,
-                      batch_size=batch_size,
+                      batch_size=BATCH_SIZE,
                       shuffle=True,
                       drop_last=True,
                       pin_memory=False)   # faster H2D for task_ds batches
-# ---------------------------------------------------------------------
-# Single epoch training
-# ---------------------------------------------------------------------
-def train_epoch(loader):
-    optimizer = torch.optim.Adam(model_er.parameters(), lr=1e-3)
-    criterion = NMSELoss(reduction='none')
+
+
+# optimizer = torch.optim.Adam(model_er.parameters(), lr=LR)
+# bce_loss  = torch.nn.BCEWithLogitsLoss(reduction='none')
+# sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
+
+
+def train_epoch(epoch, loader, optimizer=None, bce_loss=None, sched=None):
     model_er.train()
     total_loss = 0.0
-    en_idx = 0
-    for X, Y, Y_teacher, is_rep in tqdm(loader):
+    
+    pbar = tqdm(loader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}")
+
+    for X, Y, Y_teacher, is_rep in pbar:
         X, Y, Y_teacher, is_rep = (X.to(device), Y.to(device),
                                    Y_teacher.to(device),
                                    is_rep.to(device))
 
-        # if en_idx > 5:
-        #     break
-        # en_idx += 1
 
+
+        mag_t, mask_t = Y[:,0], Y[:,1]
+        Y_teacher_mag,Y_teacher_mask = Y_teacher[:,0], Y_teacher[:,1]
 
         optimizer.zero_grad()
-        y_pred       = model_er(X)
-        # print(f"X: {X.shape} , y_pred: {y_pred.shape}, Y: {Y.shape}, Y_teacher: {Y_teacher.shape}")
-        teacher_pred = y_pred.detach().clone()
+        mag_p, mask_logits = model_er(X)
 
-        # supervised loss
-        loss_sup = criterion(y_pred, Y).view(y_pred.size(0), -1).mean(1).mean()
-
+        # original masked NMSE
+        loss_mag_per_sample   = masked_nmse_per_sample(mag_p, mag_t, mask_t)
+        loss_mag_mean   = masked_nmse(mag_p, mag_t, mask_t)
+        
+        
+        # BCE mean loss
+        loss_mask_mean = bce_loss(mask_logits, mask_t).view(mask_logits.size(0), -1).mean(1).mean()
+        # tt = bce_loss(mask_logits, mask_t) 
+        # print(tt.shape, mask_logits.shape, mask_t.shape)
+        # BCE per sample loss
+        loss_mask_per_sample = bce_loss(mask_logits, mask_t).view(mask_logits.size(0), -1).mean(1)
+        
+        total_supervised_loss_mean_loss = loss_mag_mean + ALPHA * loss_mask_mean
+        
+        
         # distillation loss on replay
-        if args.use_distill and is_rep.any():
-            mask     = is_rep.view(-1, 1, 1)
-            loss_dist = ((y_pred - Y_teacher)**2 * mask).sum() / mask.sum()
-            loss      = loss_sup + args.lambda_bc * loss_dist
+        if args.use_distill and is_rep.any():            
+            teacher_mag_mean_loss   = masked_nmse(Y_teacher_mag, mag_p, mask_logits)
+            teacher_mask_mean_loss = bce_loss(Y_teacher_mask, mask_logits).view(mask_logits.size(0), -1).mean(1).mean()
+            total_dist_mean_loss = teacher_mag_mean_loss + ALPHA * teacher_mask_mean_loss
+            final_mean_loss      = total_supervised_loss_mean_loss + args.lambda_bc * total_dist_mean_loss
         else:
-            loss = loss_sup
+            final_mean_loss = total_supervised_loss_mean_loss
 
-        loss.backward()
+        teacher_pred_mag, teacher_pred_mask  = mag_p.detach().clone(), mask_logits.detach().clone()
+        final_mean_loss.backward()
+        clip_grad_norm_(model_er.parameters(), max_norm=1.0)
         optimizer.step()
-
-        # add to buffer
-        per_sample = criterion(y_pred, Y).view(y_pred.size(0), -1).mean(1)
+        
+        teacher_pred_stacked = torch.stack([teacher_pred_mag, teacher_pred_mask], dim=1)
         for i in range(X.size(0)):
             reservoir_add(
                 X[i].detach().cpu(),
                 Y[i].detach().cpu(),
-                teacher_pred[i].detach().cpu(),
-                per_sample[i].item()
+                teacher_pred_stacked[i].detach().cpu(),
+                loss_mag_per_sample[i].item() + ALPHA * loss_mask_per_sample[i].item()
             )
-        total_loss += loss.item()
+        
+        pbar.set_postfix(
+            nmse = loss_mag_mean.item(),
+            bce  = loss_mask_mean.item(),
+        )
+        total_loss += final_mean_loss.item()
+        # print(f"  ↳ avg train-loss: {total_loss}")
+    sched.step(total_loss / len(loader))
 
     return total_loss / len(loader)
 
@@ -234,22 +240,30 @@ def train_epoch(loader):
 # Task training wrapper
 # ---------------------------------------------------------------------
 def train_on_task(train_ds, task_name):
+    optimizer = torch.optim.Adam(model_er.parameters(), lr=LR)
+    bce_loss  = torch.nn.BCEWithLogitsLoss(reduction='none')
+    sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
     phase = "initial" if len(memory_x)==0 else "replay"
-    print(f"\n=== Training on {task_name} ({phase}) ===")
+    print(f"\n=== Training with {args.model_type} {args.sampling} on {task_name} ({phase}) ===")
     loader = build_loader(train_ds)
-    for ep in range(1, num_epochs+1):
-        ep_loss = train_epoch(loader)
-        print(f"  Epoch {ep:02d}/{num_epochs} → loss {ep_loss}")
+    for ep in range(1, NUM_EPOCHS+1):
+        ep_loss = train_epoch(ep, loader, optimizer, bce_loss, sched)
 
-# ---------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------
+
 if __name__ == "__main__":
     print("Loading datasets...")
     data_dir = "../dataset/outputs/"
-    train_S1, test_S1, train_S2, test_S2, train_S3, test_S3, \
-    _,        test_loader_S1, _,         test_loader_S2, _,         test_loader_S3 = \
-        get_all_datasets(data_dir,batch_size=batch_size, dataset_id="all")
+    train_S1, test_S1, train_loader_S1, test_loader_S1, \
+    train_S2, test_S2, train_loader_S2, test_loader_S2, \
+    train_S3, test_S3, train_loader_S3, test_loader_S3 = \
+        get_all_datasets(
+            data_dir      = "../dataset/outputs/",
+            batch_size    = BATCH_SIZE,
+            dataset_id    = "all",
+            normalization = "log_min_max",
+            per_user      = True,
+            seq_len       = SEQ_LEN
+        )
     print("Datasets loaded.")
 
     # Task 1: S1 (no replay)
@@ -261,47 +275,20 @@ if __name__ == "__main__":
     # Task 3: S3 + replay from S1+S2
     train_on_task(train_S3, "S3")
 
-    # -----------------------------------------------------------------
-    # Evaluation
-    # -----------------------------------------------------------------
-    print("\n=== Loss Evaluation ===")
-    if args.use_distill:
-        test_loss_csv_path = f"{args.sampling}_{args.model_type}_distill_loss_results.csv"
-    else:
-        test_loss_csv_path = f"{args.sampling}_{args.model_type}_loss_results.csv"
-    loss_results = {
-        'S1_Compact_loss': evaluate_model(model_er, test_loader_S1, device),
-        'S2_Dense_loss': evaluate_model(model_er, test_loader_S2, device),
-        'S3_Standard_loss': evaluate_model(model_er, test_loader_S3, device),
-    }
-
-    # Prepare the data for CSV
-    csv_rows = [['Task', 'Loss']]
-    for task, loss in loss_results.items():
-        print(f"Task {task} → Loss {loss}")
-        csv_rows.append([task, loss])
-
-    # Write to CSV file
-    with open(test_loss_csv_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerows(csv_rows)
-    print(f"Loss results saved to {test_loss_csv_path}")
-
-
 
     print("\n=== NMSE Evaluation ===")
     nmse_results = {
-        'S1_Compact': evaluate_nmse_vs_snr(model_er, test_loader_S1, device, snr_list),
-        'S2_Dense': evaluate_nmse_vs_snr(model_er, test_loader_S2, device, snr_list),
-        'S3_Standard': evaluate_nmse_vs_snr(model_er, test_loader_S3, device, snr_list),
+        'S1_Compact': evaluate_nmse_vs_snr_masked(model_er, test_loader_S1, device, SNR_LIST),
+        'S2_Dense': evaluate_nmse_vs_snr_masked(model_er, test_loader_S2, device, SNR_LIST),
+        'S3_Standard': evaluate_nmse_vs_snr_masked(model_er, test_loader_S3, device, SNR_LIST),
     }
 
-    csv_rows = [['Task', 'SNR', 'NMSE']]
+    csv_rows = [['Task', 'SNR', 'NMSE Masked', 'NMSE (dB)']]
     for task, res in nmse_results.items():
         for snr, nmse in res.items():
-            print(f"Task {task} | SNR {snr:2d} → NMSE {nmse}")
-            csv_rows.append([task, snr, f"{nmse}"])
-
+            nmse_db = -10 * math.log10(nmse + 1e-12)  # add tiny eps in case nmse==0
+            print(f"Task {task} | SNR {snr:2d} → NMSE {nmse} | {nmse_db} dB")
+            csv_rows.append([task, snr, f"{nmse}", f"{nmse_db}"])
     if args.use_distill:
         csv_path = f"{args.sampling}_{args.model_type}_distill_nmse_results.csv"
     else:

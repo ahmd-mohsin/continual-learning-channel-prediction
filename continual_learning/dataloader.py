@@ -1,14 +1,4 @@
-"""
-dataloader.py
-Fully self-contained loader for 5-D channel cubes
-(user, Rx, Subcarrier, Tx, time).
 
-New normalisation methods added:
-  • global_max
-  • sqrt_min_max
-  • clip_db
-Author: <you>
-"""
 
 import os
 import random
@@ -19,60 +9,62 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
-# -----------------------------------------------------------
-# 1)  Low-level helpers
-# -----------------------------------------------------------
-
 def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
     return torch.as_tensor(x, dtype=torch.float32, device=device)
 
 def _print_range(name: str, arr: np.ndarray) -> None:
     print(f"{name}: min={arr.min():.4f}, max={arr.max():.4f}, mean={arr.mean():.4f}")
 
-# -----------------------------------------------------------
-# 2)  Main Dataset
-# -----------------------------------------------------------
+"""
+dataloader.py
+Refactored with automatic power-of-10 scaling so that
+the largest magnitude is brought into [1, 10).
+
+author: <you>
+"""
+
+import os
+import random
+from typing import Tuple, Dict, List
+
+import h5py
+import numpy as np
+import torch
+from torch.utils.data import Dataset, DataLoader, random_split
+
+def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
+    return torch.as_tensor(x, dtype=torch.float32, device=device)
+
+def _print_range(tag: str, arr: np.ndarray):
+    print(f"{tag}: min={arr.min():.4e}  max={arr.max():.4e}  mean={arr.mean():.4e}")
+
 
 class ChannelSequenceDataset(Dataset):
     """
-    Returns   inp : (Rx, Sub, Tx, seq_len)
-              out : (Rx, Sub, Tx)
-    for one user / one starting time index.
+    Sample returned by __getitem__ :
+        inp : (Rx, Sub, Tx, seq_len)
+        out : (Rx, Sub, Tx)
     """
+
+    AVAILABLE_NORMALISERS = {
+        "min_max", "z_score", "log_min_max",
+        "robust",  "global_max", "sqrt_min_max", "clip_db"
+    }
 
     def __init__(
         self,
-        file_prefix: str,
-        file_extension: str,
+        file_prefix: str,               # path without extension
+        file_extension: str,            # 'mat' | 'npy'
         device: torch.device,
-        seq_len: int = 64,
-        normalization: str = "min_max",
-        per_user: bool = False,
-        clip_db_floor: float = -100.0,
-        clip_db_ceil: float = -30.0,
-        eps: float = 1e-9,
+        seq_len: int          = 64,
+        normalization: str    = "min_max",
+        per_user: bool        = False,  # True ⇒ normalise each user separately
+        clip_db_floor: float  = -100.0, # only for 'clip_db'
+        clip_db_ceil: float   = -30.0,  # only for 'clip_db'
+        eps: float            = 1e-12,  # for log/denoms
     ):
-        """
-        Args
-        ----
-        file_prefix   path *without* extension ('.mat' or '.npy' will be appended)
-        file_extension  'mat' | 'npy'
-        seq_len         input window length
-        normalization   see table above
-        per_user        apply scaling per user if True, else on the whole cube
-        clip_db_floor   only for 'clip_db'
-        clip_db_ceil    only for 'clip_db'
-        eps             small constant to avoid log(0)
-        """
-        assert normalization in {
-            "min_max",
-            "z_score",
-            "log_min_max",
-            "robust",
-            "global_max",
-            "sqrt_min_max",
-            "clip_db",
-        }, f"unknown normalisation {normalization}"
+        assert normalization in self.AVAILABLE_NORMALISERS, \
+            f"unknown normalisation '{normalization}'"
 
         self.device        = device
         self.normalization = normalization
@@ -82,51 +74,81 @@ class ChannelSequenceDataset(Dataset):
         self.clip_db_ceil  = clip_db_ceil
         self.eps           = eps
 
-        # ---------- load raw complex cube ----------
+        # ---------------- load raw complex cube ----------------
         file_path = file_prefix + file_extension
         if file_extension == "npy":
-            raw = np.load(file_path, mmap_mode="r")          # (U,R,S,T,L)
+            raw = np.load(file_path, mmap_mode="r")           # (U,R,S,Tx,T)
         elif file_extension == "mat":
             with h5py.File(file_path, "r") as f:
-                if "channel_matrix" in f:
+                if "channel_matrix" in f:                     # preferred layout
                     grp = f["channel_matrix"]
                     real = np.array(grp["real"])
                     imag = np.array(grp["imag"])
-                else:                                        # fallback
+                else:                                         # fallback
                     real = np.array(f["real"])
                     imag = np.array(f["imag"])
             raw = real + 1j * imag
         else:
             raise ValueError("file_extension must be 'mat' or 'npy'")
 
-        # ---------- inspect ----------
+        # ---------------- shapes & raw stats ------------------
         self.num_users, self.n_rx, self.n_sub, self.n_tx, self.time_len = raw.shape
         print("Loaded raw cube :", raw.shape)
 
-        # ---------- magnitude ----------
         mag = np.abs(raw).astype(np.float32)
+        _print_range("Raw magnitude", mag)
 
-        # ---------- apply chosen scaling ----------
+        # ---------------- auto-scale --------------------------
+        mag_scaled = self._auto_scale(mag)          # now max ≈ [1,10)
+        _print_range("After auto-scale", mag_scaled)
+
+        # ---------------- normalise ---------------------------
         self.data = (
-            self._scale_per_user(mag) if per_user else self._scale_global(mag)
+            self._scale_per_user(mag_scaled)
+            if self.per_user else
+            self._scale_global(mag_scaled)
         )
-        _print_range("After scaling", self.data)
+        _print_range("After normalisation", self.data)
 
-        # ---------- info for caller ----------
+        # stats for inverse-transform or debugging
         self.samples_per_user = self.time_len - (self.seq_len + 1)
+    
 
-    # ---------------------------------------------------------
-    # 2-A  normalisation helpers
-    # ---------------------------------------------------------
+    def _auto_scale(self, mag: np.ndarray) -> np.ndarray:
+        """Bring max magnitude into [1,10) via power-of-10 gain."""
+        if self.per_user:
+            out            = np.empty_like(mag)
+            self.gains: List[float] = []
+            for u in range(self.num_users):
+                g = self._calc_gain(mag[u].max())
+                self.gains.append(g)
+                out[u] = mag[u] * g
+            print(f"Per-user auto gain : "
+                  f"{min(self.gains):.1e} – {max(self.gains):.1e}")
+            return out
+        else:
+            g              = self._calc_gain(mag.max())
+            self.gain      = g
+            print(f"Global auto gain  : {g:.1e}")
+            return mag * g
 
-    def _scale_per_user(self, mag: np.ndarray) -> np.ndarray:
-        out = np.empty_like(mag, dtype=np.float32)
+    @staticmethod
+    def _calc_gain(max_val: float) -> float:
+        if max_val <= 0:
+            return 1.0                             # all zeros → leave as is
+        power = np.ceil(-np.log10(max_val))        # e.g. 7.9e-6 → +6 ⇒ 10^6
+        return 10.0 ** power                       # ensures new max ∈ [1,10)
+
+    def _scale_per_user(self, arr: np.ndarray) -> np.ndarray:
+        out = np.empty_like(arr, dtype=np.float32)
         for u in range(self.num_users):
-            out[u] = self._apply_scaler(mag[u])
+            out[u] = self._apply_scaler(arr[u])
         return out
 
-    def _scale_global(self, mag: np.ndarray) -> np.ndarray:
-        return self._apply_scaler(mag)
+    def _scale_global(self, arr: np.ndarray) -> np.ndarray:
+        return self._apply_scaler(arr)
+
+    # ---- concrete scalers -----------------------------------
 
     def _apply_scaler(self, x: np.ndarray) -> np.ndarray:
         """Return x scaled to [0,1] (or z-scored) according to self.normalization."""
@@ -146,11 +168,10 @@ class ChannelSequenceDataset(Dataset):
             return self._clip_db(x)
         raise RuntimeError("unreachable")
 
-    # ---- concrete scalers ----
     def _min_max(self, x):
         a, b = x.min(), x.max()
         if b == a:
-            return np.zeros_like(x)      # silent channel
+            return np.zeros_like(x)
         return (x - a) / (b - a)
 
     def _z_score(self, x):
@@ -163,7 +184,7 @@ class ChannelSequenceDataset(Dataset):
 
     def _robust(self, x):
         q25, q75 = np.percentile(x, [25, 75])
-        iqr      = q75 - q25 if (q75 - q25) > self.eps else self.eps
+        iqr      = max(q75 - q25, self.eps)
         return np.clip((x - q25) / iqr, 0, 1)
 
     def _clip_db(self, x):
@@ -171,34 +192,24 @@ class ChannelSequenceDataset(Dataset):
         y = np.clip(y, self.clip_db_floor, self.clip_db_ceil)
         return (y - self.clip_db_floor) / (self.clip_db_ceil - self.clip_db_floor)
 
-    # ---------------------------------------------------------
-    # 2-B  PyTorch dataset API
-    # ---------------------------------------------------------
-
     def __len__(self) -> int:
         return self.num_users * self.samples_per_user
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx):
         user   = idx // self.samples_per_user
         t0     = idx %  self.samples_per_user
-        inp = self.data[user, :, :, :, t0 : t0 + self.seq_len]
-        out = self.data[user, :, :, :, t0 + self.seq_len]
-        return _to_tensor(inp, self.device), _to_tensor(out, self.device)
 
-    # ---------------------------------------------------------
-    # 2-C  expose original stats (optional)
-    # ---------------------------------------------------------
+        mag_seq = self.data[user, :, :, :, t0 : t0 + self.seq_len]      # (R,S,T,L)
+        mag_tgt = self.data[user, :, :, :, t0 + self.seq_len]           # (R,S,T)
 
-    def get_stats(self) -> Dict[str, float]:
-        """handy for inverse-transform later"""
-        return {
-            "normalization": self.normalization,
-            "per_user": self.per_user,
-        }
+        mask_seq = (mag_seq > 0).astype(np.float32)
+        mask_tgt = (mag_tgt > 0).astype(np.float32)
 
-# -----------------------------------------------------------
-# 3)  Convenience loader for your 3 datasets
-# -----------------------------------------------------------
+        # stack → channel dimension: 0=magnitude, 1=mask
+        inp  = np.stack([mag_seq, mask_seq], axis=0)                    # (2,R,S,T,L)
+        out  = np.stack([mag_tgt, mask_tgt], axis=0)                    # (2,R,S,T)
+
+        return _to_tensor(inp,  self.device), _to_tensor(out, self.device)
 
 def split_dataset(dataset: Dataset, split_ratio: float = 0.8):
     n = len(dataset)
@@ -206,17 +217,11 @@ def split_dataset(dataset: Dataset, split_ratio: float = 0.8):
     n_test  = n - n_train
     return random_split(dataset, [n_train, n_test])
 
-def _load_one(
-    path_prefix: str,
-    batch_size : int,
-    device     : torch.device,
-    **ds_kwargs,
-):
-    ds  = ChannelSequenceDataset(path_prefix, "mat", device, **ds_kwargs)
+def _load_one(path_prefix: str, batch_size: int, device: torch.device, **ds_kw):
+    ds  = ChannelSequenceDataset(path_prefix, "mat", device, **ds_kw)
     trn, tst = split_dataset(ds, 0.8)
     return (
-        trn,
-        tst,
+        trn, tst,
         DataLoader(trn, batch_size, shuffle=True,  drop_last=True),
         DataLoader(tst, batch_size, shuffle=False, drop_last=False),
     )
@@ -224,7 +229,7 @@ def _load_one(
 def get_all_datasets(
     data_dir: str,
     batch_size: int = 16,
-    dataset_id = 1,
+    dataset_id      = 1,          # 1 | 2 | 3 | 'all'
     **ds_kwargs,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -234,27 +239,11 @@ def get_all_datasets(
         3: "umi_fixed_standard_8Tx_2Rx.",
     }
 
-    def maybe_load(i):
+    def maybe(i):
         if dataset_id in (i, "all"):
-            path = os.path.join(data_dir, names[i])
-            print(f"→ Loading Dataset {i}: {path}mat")
-            return _load_one(path, batch_size, device, **ds_kwargs)
+            p = os.path.join(data_dir, names[i])
+            print(f"→ Loading Dataset {i}: {p}mat")
+            return _load_one(p, batch_size, device, **ds_kwargs)
         return (None,) * 4
 
-    return (*maybe_load(1), *maybe_load(2), *maybe_load(3))
-
-# -----------------------------------------------------------
-# 4)  Quick self-test
-# -----------------------------------------------------------
-
-if __name__ == "__main__":
-    ddir = "/path/to/outputs"
-    _, _, train_loader, _, = get_all_datasets(
-        ddir,
-        batch_size=8,
-        dataset_id=1,
-        normalization="clip_db",
-        per_user=True,
-    )[:4]
-    x, y = next(iter(train_loader))
-    print("batch_inp :", x.shape, " batch_out :", y.shape)
+    return (*maybe(1), *maybe(2), *maybe(3))

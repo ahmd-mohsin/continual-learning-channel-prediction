@@ -20,9 +20,7 @@ class BinaryStep(nn.Module):
         return BinaryStepFunction.apply(x)
     
     
-###############################################################################
-# Helper function for Transformer masks (like in the notebook)
-###############################################################################
+
 def generate_square_subsequent_mask(dim1, dim2):
     """
     Generate a square mask for the sequence so that the model 
@@ -34,12 +32,7 @@ def generate_square_subsequent_mask(dim1, dim2):
 
 
     
-###############################################################################
-# 3) GRU Model (with Sigmoid + Dropout)
-###############################################################################
-###############################################################################
-# 3) GRU Model (with ReLU + Dropout)
-###############################################################################
+
 class GRUModel(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=32, output_dim=1,
                  n_layers=3, H=18, W=8, dropout=0.5):
@@ -63,9 +56,7 @@ class GRUModel(nn.Module):
         out     = out.view(b, H, W, R)               # (b, 2, H, W, R)
         return out
 
-###############################################################################
-# 4) LSTM Model (with ReLU + Dropout)
-###############################################################################
+
 class LSTMChannelPredictor(nn.Module):
     """
     Predicts next‐step magnitude plus a binary mask.
@@ -147,9 +138,7 @@ class LSTMChannelPredictor(nn.Module):
 
         return mag_logits, mask_logits
 
-###############################################################################
-# 5) Transformer Model (with ReLU + Dropout)
-###############################################################################
+
 class TransformerModel(nn.Module):
     def __init__(self, dim_val=128, n_heads=4,
                  n_encoder_layers=1, n_decoder_layers=1,
@@ -193,9 +182,7 @@ class TransformerModel(nn.Module):
         out = self.drop(out)
         out = out.view(b, H, W, R)
         return out
-###############################################################################
-# Positional Encoding (commonly used in Transformers)
-###############################################################################
+
 class PositionalEncoding(nn.Module):
     """
     Wraps the frequency-based embedder (from positionalembber.py)

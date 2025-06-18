@@ -15,7 +15,7 @@ BATCH_SIZE = 2048
 SEQ_LEN    = 16
 NUM_EPOCHS = 100
 ALPHA      = 0.2         # weight for BCE mask loss
-LR         = 1e-4
+LR         = 1e-3
 SNR_LIST   = [0,5,10,12,14,16,18,20,22,24,26,28,30]
 
 # --------------- data loading ---------------------------
@@ -46,9 +46,7 @@ def init_weights(m):
 model.apply(init_weights)
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 bce_loss  = torch.nn.BCEWithLogitsLoss()
-# new magnitude-error terms
-huber_loss_fn = torch.nn.SmoothL1Loss()
-l1_loss_fn   = torch.nn.L1Loss()
+
 
 # sched     = ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
 sched = CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
