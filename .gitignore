@@ -3,7 +3,7 @@
 .vscode/
 .DS_store
 prompts/
-
+datatset/
 # matlab
 *.mat
 *.pkl
@@ -69,6 +69,7 @@ cover/
 # Translations
 *.mo
 *.pot
+search-EXP*
 
 # Django stuff:
 *.log
@@ -143,10 +144,13 @@ celerybeat.pid
 *.sage.py
 
 
-
+*.pth
 .venv
 .env
 env/
 venv/
 env.bak/
 venv.bak/
+*.log
+*.out
+*.lwf
