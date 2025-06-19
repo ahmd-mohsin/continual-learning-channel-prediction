@@ -2,7 +2,10 @@
 
 This directory contains scripts for continual learning experiments on channel prediction tasks, as submitted to the ICML 2025 Workshop.
 
-[OpenReview submission](https://openreview.net/forum?id=xzaGCSM7Sv\&nesting=2\&sort=date-desc)
+[![OpenReview](https://img.shields.io/badge/OpenReview-View-blue?logo=openreview)](https://openreview.net/forum?id=xzaGCSM7Sv&nesting=2&sort=date-desc)  [![arXiv](https://img.shields.io/badge/arXiv-View-brightgreen?logo=arxiv)](https://arxiv.org/abs/PLACEHOLDER)
+
+
+![Continual Training Results](img/results.png)
 
 ## Folder Structure
 
@@ -81,6 +84,9 @@ python nmse.py --ext mat --model_type GRU \
 ```bash
 bash run_everything.sh
 ```
+
+## Continual Training
+![Continual Training Workflow](img/architecture.png)
 
 ### 1. Learning without Forgetting (LwF)
 
