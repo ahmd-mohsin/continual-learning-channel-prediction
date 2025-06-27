@@ -1,4 +1,4 @@
-# Continual Learning for Wireless Channel Prediction ICML 2025
+# Continual Learning for Wireless Channel Prediction [ICML 2025]
 
 This directory contains scripts for continual learning experiments on channel prediction tasks, as accepted to the [ICML 2025].
 
