@@ -1,6 +1,6 @@
 # Continual Learning for Wireless Channel Prediction ICML 2025
 
-This directory contains scripts for continual learning experiments on channel prediction tasks, as accepted to the ICML 2025 Workshop.
+This directory contains scripts for continual learning experiments on channel prediction tasks, as accepted to the [ICML 2025].
 
 [![OpenReview](https://img.shields.io/badge/OpenReview-View-blue?logo=openreview)](https://openreview.net/forum?id=xzaGCSM7Sv&nesting=2&sort=date-desc)  [![arXiv](https://img.shields.io/badge/arXiv-View-brightgreen?logo=arxiv)](https://arxiv.org/abs/PLACEHOLDER)
 
